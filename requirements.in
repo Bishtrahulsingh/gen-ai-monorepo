@@ -4,3 +4,4 @@ pydantic
 httpx
 pytest
 qdrant-client
+sqlalchemy
