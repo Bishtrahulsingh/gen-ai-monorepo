@@ -99,3 +99,4 @@ websockets==16.0
     # via uvicorn
 
 sqlalchemy
+pydantic-settings
