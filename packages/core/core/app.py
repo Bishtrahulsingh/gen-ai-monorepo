@@ -11,3 +11,9 @@ def create_app():
     app.add_exception_handler(RequestValidationError,validation_error)
     app.add_exception_handler(Exception, exception_handler)
     return app
+
+app = create_app()
+
+@app.get('/health')
+def health():
+    return {'status': 'ok'}
