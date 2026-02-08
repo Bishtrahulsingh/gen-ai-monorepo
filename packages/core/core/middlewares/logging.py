@@ -23,7 +23,7 @@ class RequestTracingMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        duration_ms = (time.time() - start)/1000
+        duration_ms = (time.time() - start)*1000
         endpoint = request.url.path
 
         client_ip = request.client.host if request.client else "unknown"

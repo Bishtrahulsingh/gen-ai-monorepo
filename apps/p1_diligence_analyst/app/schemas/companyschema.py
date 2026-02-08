@@ -1,4 +1,4 @@
-from core import APIModel, IdModel, TimeStampModel
+from packages.core.core import APIModel, IdModel, TimeStampModel
 from pydantic import Field, AnyUrl, ConfigDict
 from typing import Optional
 
@@ -10,6 +10,6 @@ class CompanyCreate(APIModel):
 class CompanyOut(IdModel,TimeStampModel):
     name: str
     website: Optional[AnyUrl] = None
-    industry: str =None
+    industry: Optional[str] =None
 
     model_config = ConfigDict(from_attributes=True)

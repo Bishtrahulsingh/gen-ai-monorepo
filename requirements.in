@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 pydantic
 httpx
-pytest
 qdrant-client
 sqlalchemy
-pytest-cov
+pydantic-settings

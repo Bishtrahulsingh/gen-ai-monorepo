@@ -3,10 +3,10 @@ import uuid
 
 from fastapi import APIRouter
 
-from app.schemas import CompanyOut,CompanyCreate
-router = APIRouter(prefix="/company", tags=['company'])
+from ..schemas import CompanyOut,CompanyCreate
+router = APIRouter(prefix="/api/v1", tags=['company'])
 
-@router.post('/createcompany',response_model=CompanyOut)
+@router.post('/company',response_model=CompanyOut)
 def create_company(payload:CompanyCreate):
 
     return CompanyOut(

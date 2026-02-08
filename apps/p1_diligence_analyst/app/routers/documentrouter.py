@@ -2,11 +2,11 @@ import datetime
 
 from fastapi import APIRouter
 import uuid
-from app.schemas import DocumentCreate,DocumentOut
+from ..schemas import DocumentCreate,DocumentOut
 
-router = APIRouter(prefix='/documents',tags=['documents'])
+router = APIRouter(prefix='/api/v1',tags=['documents'])
 
-@router.post("/createdocument",response_model=DocumentOut)
+@router.post("/document",response_model=DocumentOut)
 async def create_document(payload:DocumentCreate):
     return DocumentOut(
         id=uuid.uuid4(),

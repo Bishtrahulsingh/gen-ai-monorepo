@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from core.exception.globalexception import validation_error, exception_handler
-from core.middlewares.logging import RequestTracingMiddleware
+
+from .exception.globalexception import validation_error,exception_handler
+from .middlewares.logging import RequestTracingMiddleware
 
 def create_app():
     app_c = FastAPI()
