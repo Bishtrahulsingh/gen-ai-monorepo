@@ -1,5 +1,5 @@
 from core import APIModel, IdModel, TimeStampModel
-from pydantic import Field,AnyUrl
+from pydantic import Field, AnyUrl, ConfigDict
 from typing import Optional
 import uuid
 import enum
@@ -23,5 +23,4 @@ class DocumentOut(IdModel,TimeStampModel):
     title:str
     doc_type:DocumentType
     source:Optional[AnyUrl]=None
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

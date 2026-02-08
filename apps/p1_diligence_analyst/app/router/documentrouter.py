@@ -2,7 +2,7 @@ import datetime
 
 from fastapi import APIRouter
 import uuid
-from apps.p1_diligence_analyst.app.schemas import DocumentCreate,DocumentOut
+from app.schemas import DocumentCreate,DocumentOut
 
 router = APIRouter(prefix='/documents',tags=['documents'])
 

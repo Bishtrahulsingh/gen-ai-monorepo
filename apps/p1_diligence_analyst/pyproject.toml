@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p1-diligence-analyst"
+version = "0.1.0"
+description = "FastAPI service of P1 diligence analyst"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "core",
+]
+
+[tool.setuptools]
+packages = ["app"]

@@ -5,3 +5,4 @@ httpx
 pytest
 qdrant-client
 sqlalchemy
+pytest-cov

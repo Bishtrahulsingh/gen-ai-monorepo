@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter
 
-from apps.p1_diligence_analyst.app.schemas import CompanyOut,CompanyCreate
+from app.schemas import CompanyOut,CompanyCreate
 router = APIRouter(prefix="/company", tags=['company'])
 
 @router.post('/createcompany',response_model=CompanyOut)

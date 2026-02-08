@@ -1,5 +1,5 @@
 from core import APIModel, IdModel, TimeStampModel
-from pydantic import Field,AnyUrl
+from pydantic import Field, AnyUrl, ConfigDict
 from typing import Optional
 
 class CompanyCreate(APIModel):
@@ -12,5 +12,4 @@ class CompanyOut(IdModel,TimeStampModel):
     website: Optional[AnyUrl] = None
     industry: str =None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

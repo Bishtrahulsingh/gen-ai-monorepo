@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+testpaths = ["apps/p1_diligence_analyst/tests", "packages/core/tests"]
+addopts = ["--import-mode=importlib"]
+python_files = ["test_*.py"]
