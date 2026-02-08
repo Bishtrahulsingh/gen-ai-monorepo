@@ -1,7 +1,8 @@
-# Due Diligence Analyst
+## Due Diligence Analyst
 
-This is an ai-powered assistant that helps investors quickly identify **risks, red flags, and key questions** when evaluating startups.
+This is an ai-powered assistant that helps investors quickly identify risks, red flags, and key questions when evaluating startups.
 The idea is simple, before you invest time or money in a startup, you want a quick, structured way to understand what might be missing, or risky.
+
 ---
 
 ## What problem does this solve?
@@ -41,11 +42,14 @@ gen-ai-monorepo/
 └── pyproject.toml
 ```
 
+---
+
 ### Why we used a monorepo?
 
 * The project contains two different shared directories core and diligence system.
 * Shared core logic without duplication
 * Consistent tooling, tests, and dependencies
+
 ---
 
 ## Tech stack (initial)
@@ -55,6 +59,7 @@ gen-ai-monorepo/
 * pytest
 * Sqlalchemy(postgres)
 * Pydantic
+
 ---
 
 ## Current status
