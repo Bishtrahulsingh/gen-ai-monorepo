@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-pydantic
-httpx
-qdrant-client
-sqlalchemy
-pydantic-settings

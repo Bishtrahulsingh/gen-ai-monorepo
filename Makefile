@@ -5,7 +5,8 @@ setup:
 	. .venv/bin/activate && pip install -r requirements.txt && pip install -e packages/core
 
 run-p1:
-	uvicorn apps.p1_diligence_analyst.app.main:app --reload
+	uvicorn apps.p1_diligence_analyst.diligence_analyst.main:app --reload
 
 test-core:
-	pytest packages/core
+	python -m pytest packages/core apps/p1_diligence_analyst
+

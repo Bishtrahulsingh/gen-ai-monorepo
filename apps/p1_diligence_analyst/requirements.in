@@ -1,0 +1,5 @@
+-e ../../packages/core --config-settings editable_mode=compat
+
+diligence_core[test]
+
+-e . --config-settings editable_mode=compat

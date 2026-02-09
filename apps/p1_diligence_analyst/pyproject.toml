@@ -2,17 +2,30 @@
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+
 [project]
-name = "p1-diligence-analyst"
+name = "diligence_analyst"
 version = "0.1.0"
 description = "FastAPI service of P1 diligence analyst"
 requires-python = ">=3.10"
 
+
 dependencies = [
-    "fastapi",
-    "uvicorn",
-    "core",
+  "fastapi>=0.110,<1",
+  "uvicorn[standard]>=0.23,<1",
+  "pydantic>=2,<3",
+  "pydantic-settings>=2,<3",
+  "httpx>=0.25,<1",
+  "qdrant-client>=1.8,<2",
+  "sqlalchemy>=2,<3",
+]
+
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+  "pytest-cov",
 ]
 
 [tool.setuptools]
-packages = ["app"]
+packages = ["diligence_analyst"]

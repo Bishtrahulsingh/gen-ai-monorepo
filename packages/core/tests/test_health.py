@@ -1,6 +1,5 @@
-
-from fastapi.testclient import TestClient
-from packages.core.core.app import app
+from starlette.testclient import TestClient
+from diligence_core.app import app
 
 client = TestClient(app)
 

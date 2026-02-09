@@ -3,10 +3,25 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "core"
+name = "diligence_core"
 version = "0.1.0"
 description = "Shared core utilities"
 requires-python = ">=3.10"
+dependencies=[
+    'fastapi',
+    'pydantic'
+]
+
+[project.optional-dependencies]
+tokenizers=[
+    'transformer',
+    'sentencepiece'
+]
+test = [
+  "pytest",
+  "pytest-cov",
+]
+
 
 [tool.setuptools]
-packages = ["core"]
+packages = ["diligence_core"]

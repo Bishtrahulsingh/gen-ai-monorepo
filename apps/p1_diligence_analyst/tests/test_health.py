@@ -1,5 +1,5 @@
 from starlette.testclient import TestClient
-from apps.p1_diligence_analyst.app.main import app
+from diligence_analyst.main import app
 
 client = TestClient(app=app)
 

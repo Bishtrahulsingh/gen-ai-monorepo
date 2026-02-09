@@ -1,4 +1,4 @@
-from packages.core.core import APIModel, IdModel, TimeStampModel
+from diligence_core import APIModel, IdModel, TimeStampModel
 from pydantic import Field, AnyUrl, ConfigDict
 from typing import Optional
 import uuid
