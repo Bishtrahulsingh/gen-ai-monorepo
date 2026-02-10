@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Shared core utilities"
 requires-python = ">=3.10"
 dependencies=[
-    'fastapi',
-    'pydantic'
+    "fastapi>=0.110,<1",
+    "pydantic>=2,<3"
 ]
 
 [project.optional-dependencies]
 tokenizers=[
-    'transformer',
-    'sentencepiece'
+    "transformers>=5.0,<5.2",
+    "sentencepiece>=0.2.0,<0.2.2"
 ]
 test = [
   "pytest",
