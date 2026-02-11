@@ -1,12 +1,10 @@
 import asyncio
-import os
 import random
 from typing import Iterable
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_random_exponential
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
 from diligence_core import settings
-
 
 class LLMWrapper:
     def __init__(self,max_allowed:int=10):
@@ -30,17 +28,21 @@ class LLMWrapper:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
+        wait=wait_random_exponential(multiplier=1, max=8),
+        reraise=True
     )
     async def call_model(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->str:
         async with self._sem:
             model = self.choose_model()
-            response = await self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                **kwargs
-            )
-            print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
-
-            return response.choices[0].message.content or ""
+            try:
+                response = await self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    **kwargs
+                )
+                print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
+                return response.choices[0].message.content or ""
+            except Exception:
+                print('Model Attempt Failed retrying...')
+                raise
 
