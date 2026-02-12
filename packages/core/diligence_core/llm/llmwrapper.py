@@ -1,6 +1,9 @@
 import asyncio
 import random
-from typing import Iterable
+import time
+from typing import Iterable, AsyncGenerator, Any, Optional
+
+from httpx import stream
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
@@ -23,26 +26,30 @@ class LLMWrapper:
         weights = list(self.weighted_models.values())
         return random.choices(models,weights)[0]
 
-    async def complete(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->str:
-        return await self.call_model(messages=messages,**kwargs)
-
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_random_exponential(multiplier=1, max=8),
         reraise=True
     )
-    async def call_model(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->str:
+    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->Any:
         async with self._sem:
             model = self.choose_model()
             try:
                 response = await self.client.chat.completions.create(
                     model=model,
                     messages=messages,
+                    stream=True,
                     **kwargs
                 )
-                print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
-                return response.choices[0].message.content or ""
-            except Exception:
+                # print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
+                async for chunk in response:
+                    print(chunk, end='\n\n\n')
+                    token_text = chunk.choices[0].delta.content
+                    if not token_text:
+                        continue
+                    yield token_text
+
+            except Exception as e:
+                print(e)
                 print('Model Attempt Failed retrying...')
                 raise
-

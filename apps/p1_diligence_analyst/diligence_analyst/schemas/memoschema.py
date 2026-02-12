@@ -4,9 +4,9 @@ from pydantic import BaseModel,Field
 
 
 class Severity(enum.Enum):
-    low = "low",
-    medium = "medium",
-    high = "high",
+    low = "low"
+    medium = "medium"
+    high = "high"
 
 class RiskSchema(BaseModel):
     risk: str
