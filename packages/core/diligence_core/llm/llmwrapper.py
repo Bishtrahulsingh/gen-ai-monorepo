@@ -1,9 +1,6 @@
 import asyncio
 import random
-import time
-from typing import Iterable, AsyncGenerator, Any, Optional
-
-from httpx import stream
+from typing import Iterable, AsyncGenerator, Any
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
@@ -18,29 +15,50 @@ class LLMWrapper:
             "mixtral-8x7b-32768": 0.10,
             "gemma-7b-it": 0.05
         }
+
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self._sem = asyncio.Semaphore(max_allowed)
 
-    def choose_model(self)->str:
+    def choose_model(self , dump_model:str = None)->str:
         models = list(self.weighted_models.keys())
         weights = list(self.weighted_models.values())
         return random.choices(models,weights)[0]
+
+    async def non_streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs):
+        async with self._sem:
+            model = self.choose_model()
+            try:
+                response = await self.client.chat.completions.create(
+                    messages=messages,
+                    model=model,
+                    stream=False,
+                    **kwargs
+                )
+
+                return response.choices[0].message.content
+            except Exception as e:
+                print(e)
+                raise
+
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_random_exponential(multiplier=1, max=8),
         reraise=True
     )
-    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->Any:
-        async with self._sem:
-            model = self.choose_model()
-            try:
-                response = await self.client.chat.completions.create(
+    async def call_llm_streamed(self,model:str, messages:Iterable[ChatCompletionMessageParam],**kwargs)->Any:
+        return await self.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     stream=True,
                     **kwargs
                 )
+
+    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->AsyncGenerator[str,None]:
+        async with self._sem:
+            model = self.choose_model()
+            try:
+                response = await self.call_llm_streamed(model,messages=messages,**kwargs)
                 # print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
                 async for chunk in response:
                     print(chunk, end='\n\n\n')
