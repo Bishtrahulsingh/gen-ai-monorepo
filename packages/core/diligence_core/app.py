@@ -3,6 +3,12 @@ from fastapi.exceptions import RequestValidationError
 
 from .exception.globalexception import validation_error,exception_handler
 from .middlewares.logging import RequestTracingMiddleware
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 def create_app():
     app_c = FastAPI()

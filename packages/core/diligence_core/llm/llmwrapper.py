@@ -1,9 +1,9 @@
 import asyncio
-import json
 from typing import Iterable, AsyncGenerator, Any, List, Optional
-from tenacity import retry, stop_after_attempt, wait_random_exponential
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
+
+from diligence_analyst.prompts.p1_memo.load_prompt import load_prompt
 from diligence_core import settings
 
 class LLMWrapper:
@@ -61,22 +61,25 @@ class LLMWrapper:
                     **kwargs
                 )
 
-    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->AsyncGenerator[str,None]:
+    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->Optional[AsyncGenerator[str,None]]:
         async with self._sem:
             try:
                 judge,raw_response = await self.non_streamed_response(messages=messages,**kwargs)
-                response1 = json.loads(raw_response) #strictly will provide json format
 
-                if not response1:
-                    raise Exception('no response provided')
+                judge_system_prompt = load_prompt('system_template_judge.md')
 
-                response = await self.call_llm_streamed(judge,messages=response1,**kwargs)
+                messages = [
+                    {'role':'system','content':judge_system_prompt },
+                    {'role':'user','content':raw_response}
+                ]
+
+                response = await self.call_llm_streamed(judge,messages=messages,**kwargs)
                 # print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
                 async for chunk in response:
-                    print(chunk, end='\n\n\n')
                     token_text = chunk.choices[0].delta.content
                     if not token_text:
                         continue
+                    print(token_text, end="")
                     yield token_text
 
             except Exception as e:
