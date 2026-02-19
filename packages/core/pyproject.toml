@@ -9,7 +9,10 @@ description = "Shared core utilities"
 requires-python = ">=3.10"
 dependencies=[
     "fastapi>=0.110,<1",
-    "pydantic>=2,<3"
+    "pydantic>=2,<3",
+    "fastembed>=0.7.0,<0.7.5",
+    "numpy>=2.4.1,<2.5",
+    "pypdf>=6.7.0,<6.8"
 ]
 
 [project.optional-dependencies]

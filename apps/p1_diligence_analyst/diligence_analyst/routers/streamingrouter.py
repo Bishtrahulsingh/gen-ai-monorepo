@@ -44,11 +44,17 @@ async def llm_calling():
     llm= LLMWrapper()
 
     request_id = str(uuid.uuid4())
+    judge, raw_response = await llm.non_streamed_response(messages=messages)
+    judge_system_prompt = load_prompt('system_template_judge.md')
+    messages = [
+        {'role': 'system', 'content': judge_system_prompt},
+        {'role': 'user', 'content': raw_response}
+    ]
 
     async def stream_chunk():
         try:
             yield sse('status',{'request_id': request_id, 'state':'start'})
-            async for chunk in llm.streamed_response(messages=messages):
+            async for chunk in llm.streamed_response(judge=judge,messages=messages):
                 yield sse('delta',{'request_id':request_id, 'text':chunk})
             yield  sse('status', {'request_id': request_id, 'state':'complete'})
         except Exception as e:
@@ -60,4 +66,5 @@ async def llm_calling():
                     'message':'STREAMING FAILED'
                 }
             )
+            raise
     return StreamingResponse(stream_chunk(), media_type="text/event-stream")

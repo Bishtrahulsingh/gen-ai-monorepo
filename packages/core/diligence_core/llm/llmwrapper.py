@@ -2,8 +2,6 @@ import asyncio
 from typing import Iterable, AsyncGenerator, Any, List, Optional
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
-
-from diligence_analyst.prompts.p1_memo.load_prompt import load_prompt
 from diligence_core import settings
 
 class LLMWrapper:
@@ -61,18 +59,9 @@ class LLMWrapper:
                     **kwargs
                 )
 
-    async def streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs)->Optional[AsyncGenerator[str,None]]:
+    async def streamed_response(self,judge:str,messages:Iterable[ChatCompletionMessageParam],**kwargs)->AsyncGenerator[str,None]:
         async with self._sem:
             try:
-                judge,raw_response = await self.non_streamed_response(messages=messages,**kwargs)
-
-                judge_system_prompt = load_prompt('system_template_judge.md')
-
-                messages = [
-                    {'role':'system','content':judge_system_prompt },
-                    {'role':'user','content':raw_response}
-                ]
-
                 response = await self.call_llm_streamed(judge,messages=messages,**kwargs)
                 # print(response.usage.completion_tokens, response.usage.prompt_tokens, response.usage.total_tokens,response.usage.completion_time)
                 async for chunk in response:
