@@ -11,11 +11,12 @@ router = APIRouter(prefix='/api/v1',tags=['documents'])
 
 @router.post("/document",response_model=DocumentOut)
 async def create_document(payload:DocumentCreate):
-    source = "sample.pdf"
-    pages_list = read_pdf(source)
-    chunks = create_chunks(pages_list = pages_list, user_id=uuid.uuid4(), doc_id=uuid.uuid4(), org_id=uuid.uuid4(), case_id=uuid.uuid4())
-    context_embeddings = await embed_context(chunks)
-    print(context_embeddings)
+    source = "https://zgeadpognspjixavxdbd.supabase.co/storage/v1/object/public/docs/Accenture-2024-10-K.pdf"
+    chunks = await create_chunks(file_path=source, user_id=uuid.uuid4(), document_id=uuid.uuid4(), company_id=uuid.uuid4())
+    for chunk in chunks :
+        print(chunk, end="\n\n")
+    # context_embeddings = await embed_context(chunks)
+    # print(context_embeddings)
 
     return DocumentOut(
         id=uuid.uuid4(),
