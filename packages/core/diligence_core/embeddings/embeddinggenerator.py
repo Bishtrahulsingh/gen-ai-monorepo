@@ -1,8 +1,9 @@
 from typing import List,Dict, Union
-import asyncio
 from fastembed import TextEmbedding
 import numpy as np
 import uuid
+import asyncio
+from google import genai
 
 _query_sem = asyncio.Semaphore(16)
 _context_sem = asyncio.Semaphore(2)
@@ -12,7 +13,16 @@ Value = Union[str,int, uuid.UUID,np.ndarray]
 Chunk = Dict[str, Value]
 Chunks = List[Chunk]
 
-def _embed_text(chunks:Chunks,batch_size:int = 32)->Chunks:
+client = genai.Client(api_key='AIzaSyD6Bzy4Usb4nAmwoqrTKL8ke61oHKj4Ke4') ##dangerous
+
+async def _get_embeddings_async(texts: list[str]):
+    response = await client.aio.models.embed_content(
+        model="gemini-embedding-001",
+        contents=texts
+    )
+    return [e.values for e in response.embeddings]
+
+async def _embed_text(chunks:Chunks,batch_size:int = 32)->Chunks:
     out = []
     texts = []
     for chunk in chunks:
@@ -31,11 +41,11 @@ async def embed_query(query:str)->Chunks:
         return []
 
     async with _query_sem:
-        return await asyncio.to_thread(_embed_text,[{'text':query}])
+        return await _embed_text([{'text':query}])
 
 async def embed_context(chunks:Chunks)->Chunks:
     if not chunks:
         return []
 
     async with _context_sem:
-        return asyncio.to_thread(_embed_text, chunks)
+        return await _embed_text(chunks)
