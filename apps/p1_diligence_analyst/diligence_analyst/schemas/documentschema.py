@@ -15,8 +15,7 @@ class DocumentCreate(APIModel):
     company_id:uuid.UUID = Field(...,title='company_id',description='id of company')
     title:str=Field(...,title='document title',description='title of document')
     doc_type:DocumentType = Field(...,title='document type',description='type of document from pdf,sec_filling,web,image,audio')
-    source:Optional[AnyUrl]=Field(default=None,title='source url',description='enter source url of document')
-
+    source:AnyUrl=Field(title='source url',description='enter source url of document')
 
 class DocumentOut(IdModel,TimeStampModel):
     company_id:uuid.UUID

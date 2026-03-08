@@ -52,7 +52,7 @@ async def create_chunks(file_path:AnyUrl,user_id:uuid.UUID, document_id:uuid.UUI
                     page_number=page_no,
                     chunk_number=count,
                     doc_type='pdf',
-                    source_url=file_path,
+                    source_url=str(file_path)+f"#page={page_no}",
                     vector=[]
                     ).model_dump()
                 )

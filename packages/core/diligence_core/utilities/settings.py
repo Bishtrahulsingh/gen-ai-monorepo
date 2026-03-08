@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     APP_NAME:str = 'Due Diligence Analyst'
     DEBUG: bool = True
-    GROQ_API_KEY:str = Field(..., title="Groq API Key",description="Groq API Key")
+    GROQ_API_KEY:str = Field(title="Groq API Key",description="Groq API Key")
+    QDRANT_API_KEY:str
 
 settings = Settings()
