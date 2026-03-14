@@ -15,9 +15,10 @@ def sse(event:str, data:dict)->str:
 router = APIRouter(prefix='/api/result')
 @router.post('/stream')
 async def llm_calling(payload:RetrivalSchema):
+    llm = LLMWrapper()
     user_query = payload.query
     company_name= payload.company_name
-    context = await filter_and_search_chunks(collection_name=payload.collection_name, query=user_query, company_id=payload.company_id)
+    context = await llm.hyde_based_context_retrival(query=user_query, company_id=payload.company_id,collection_name=payload.collection_name)
 
     user_prompt = replace_input_values(load_prompt('input_template.md'),company_name,chunk_to_str(context),user_query)
     system_prompt = load_prompt('system_template_model1.md')
@@ -25,7 +26,6 @@ async def llm_calling(payload:RetrivalSchema):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    llm= LLMWrapper()
 
     request_id = str(uuid.uuid4())
     judge, raw_response = await llm.non_streamed_response(messages=messages)

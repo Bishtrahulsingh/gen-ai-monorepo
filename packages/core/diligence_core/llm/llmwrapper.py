@@ -1,14 +1,70 @@
 import asyncio
+import uuid
+from pyexpat.errors import messages
 from typing import Iterable, AsyncGenerator, Any, List, Optional
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
 from diligence_core import settings
+from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
+
 
 class LLMWrapper:
     def __init__(self,max_allowed:int=10):
         self.models=['llama-3.1-8b-instant','openai/gpt-oss-20b','llama-3.3-70b-versatile','openai/gpt-oss-120b']
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self._sem = asyncio.Semaphore(max_allowed)
+
+    async def hyde_based_context_retrival(self,query: str, company_id: uuid.UUID, collection_name: str):
+        #make a llm call for an example ans possible for best retrival
+
+        factual_signals = [
+            "what is", "what was", "how much", "total",
+            "exact", "give me", "what were", "revenue of",
+            "earnings", "eps", "net income", "gross margin",
+            "how many", "when did", "which year"
+        ]
+
+        for signal in factual_signals:
+            if signal in query.lower():
+                context = await filter_and_search_chunks(collection_name=collection_name, query=query,
+                                                         company_id=company_id)
+                return context
+
+
+        query_messages = [
+        {"role": "system", "content": """
+        You are a financial analyst assistant.
+
+        Given a user query, write a short hypothetical passage that might appear 
+        in a 10-K SEC filing or annual report related to that topic.
+    
+        Rules:
+        - Use formal SEC filing language and vocabulary
+        - Do NOT invent specific numbers, figures, or percentages
+        - Use placeholder language instead: "the company reported significant growth",
+          "revenues increased year-over-year", "margins were impacted by"
+        - Focus on the VOCABULARY and STRUCTURE of the answer, not the facts
+        - 3-5 sentences only
+    
+        Your goal is to help find relevant passages — not to answer the question.
+                
+        """},
+        {"role": "user", "content": query},
+    ]
+        response = await self.client.chat.completions.create(
+            messages=query_messages,
+            model='llama-3.1-8b-instant'
+        )
+
+        content = response.choices[0].message.content
+
+        print(content)
+
+        context = await filter_and_search_chunks(collection_name=collection_name, query=content,
+                                       company_id=company_id)
+
+        print(context)
+        return context
 
     async def fallback_completion(self,messages:Iterable[ChatCompletionMessageParam], unavailable_model:Optional[str]=None,**kwargs)->List[str]:
         available_models = list(self.models)
