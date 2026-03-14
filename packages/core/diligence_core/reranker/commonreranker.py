@@ -19,7 +19,19 @@ def reranker(chunks:QueryResponse, query:str, top_k:int=5):
     ranks = list(rerankerfunc.rerank(query,texts))
     top_K_res = [chunk for chunk,rank in sorted(zip(extracted_chunks, ranks),key=lambda x:x[1],reverse=True)][:top_k]
 
-    return top_K_res
+    #handle lost in middle problem
+    top_k_res_sandwiched = [{}]*len(top_K_res)
+
+    location = 0
+    for chunk in top_K_res:
+        top_k_res_sandwiched[location] = chunk
+
+        if location>=0:
+            location = -1*(location + 1)
+        else:
+            location = location*-1
+
+    return top_k_res_sandwiched
 
 async def async_reranker(chunks:QueryResponse, query:str, top_k:int=5):
     return await asyncio.to_thread(reranker,chunks,query,top_k)
