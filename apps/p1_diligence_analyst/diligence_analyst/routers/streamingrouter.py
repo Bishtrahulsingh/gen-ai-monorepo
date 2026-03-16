@@ -1,12 +1,12 @@
 import json
-import logging
 import uuid
 from fastapi import APIRouter
+from pydantic import Json
 from starlette.responses import StreamingResponse
 from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
 from diligence_core.llm import LLMWrapper
-from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
+from diligence_core.reranker.commonreranker import async_reranker
 
 
 def sse(event:str, data:dict)->str:
@@ -19,26 +19,35 @@ async def llm_calling(payload:RetrivalSchema):
     user_query = payload.query
     company_name= payload.company_name
     context = await llm.hyde_based_context_retrival(query=user_query, company_id=payload.company_id,collection_name=payload.collection_name)
+    #perform reranking here to get top n relevant chunks
+    top_k_chunks = await  async_reranker(context, user_query, top_k=5)
 
-    user_prompt = replace_input_values(load_prompt('input_template.md'),company_name,chunk_to_str(context),user_query)
+    user_prompt = replace_input_values(load_prompt('input_template.md'),company_name,chunk_to_str(top_k_chunks),user_query)
     system_prompt = load_prompt('system_template_model1.md')
-    messages = [
+    generator_messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
 
     request_id = str(uuid.uuid4())
-    judge, raw_response = await llm.non_streamed_response(messages=messages)
+    judge, raw_response = await llm.non_streamed_response(messages=generator_messages)
     judge_system_prompt = load_prompt('system_template_judge.md')
-    messages = [
+    evaluator_messages = [
         {'role': 'system', 'content': judge_system_prompt},
-        {'role': 'user', 'content': raw_response}
+        {'role': 'user', 'content': (
+            f"Question: {user_query}\n\n"
+            f"Retrieved context:\n{chunk_to_str(top_k_chunks)}\n\n"
+            f"Generated answer:\n{raw_response}"
+        )}
     ]
-
+    judge_evaluation = await  llm.make_llm_call(messages=evaluator_messages,model=judge,stream=False)
+    print("[top k chunks]: \n", top_k_chunks, end="\n\n")
+    print("raw response: \n", raw_response, end="\n\n")
+    print("judge response: \n",judge_evaluation,end="\n\n")
     async def stream_chunk():
         try:
             yield sse('status',{'request_id': request_id, 'state':'start'})
-            async for chunk in llm.streamed_response(judge=judge,messages=messages):
+            async for chunk in llm.streamed_response(judge=judge,messages=evaluator_messages):
                 yield sse('delta',{'request_id':request_id, 'text':chunk})
             yield  sse('status', {'request_id': request_id, 'state':'complete'})
         except Exception as e:

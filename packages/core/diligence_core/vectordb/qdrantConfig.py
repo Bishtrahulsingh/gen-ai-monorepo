@@ -75,13 +75,8 @@ async def filter_and_search_chunks(collection_name:str, query:str, company_id):
         'document_id': 'd2b8cea3-5e9d-4502-831d-42fedc197dc7', 'company_id': '3fa85f64-5717-4562-b3fc-2c963f66afa6', 'part': 'Unknown', 'item': 'Unknown', 'heading': 'Unknown', 'page_number': 67, 'chunk_number': 0, 'doc_type': 'pdf', 'source_url': 'https://zgeadpognspjixavxdbd.supabase.co/storage/v1/object/public/docs/Accenture-2024-10-K.pdf#page=67', 'filed_at': '2026-03-08T16:16:10.978433'}, vector=None, shard_key=None, order_value=None)
         '''
 
-        # #perform reranking here to get top n relevant chunks
-        top_k_chunks = await  async_reranker(chunks,query,top_k=5)
-        print(top_k_chunks)
-
-        return top_k_chunks
+        return chunks
     else:
-        print(f"collection not found, {collection_name}")
         raise Exception(f"collection {collection_name} does not exist")
 
 async def update_or_insert_chunk(collection_name:str, chunks:List[ChunkSchema],batch_size:int = 100):

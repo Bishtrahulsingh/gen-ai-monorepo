@@ -1,9 +1,8 @@
 import asyncio
 import uuid
-from pyexpat.errors import messages
-from typing import Iterable, AsyncGenerator, Any, List, Optional
-from groq import AsyncGroq
-from groq.types.chat import ChatCompletionMessageParam
+from typing import Iterable, AsyncGenerator, Any, List, Optional, Union
+from groq import AsyncGroq, AsyncStream
+from groq.types.chat import ChatCompletionMessageParam, ChatCompletion, ChatCompletionChunk
 from diligence_core import settings
 from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
@@ -58,12 +57,8 @@ class LLMWrapper:
 
         content = response.choices[0].message.content
 
-        print(content)
-
         context = await filter_and_search_chunks(collection_name=collection_name, query=content,
                                        company_id=company_id)
-
-        print(context)
         return context
 
     async def fallback_completion(self,messages:Iterable[ChatCompletionMessageParam], unavailable_model:Optional[str]=None,**kwargs)->List[str]:
@@ -88,18 +83,22 @@ class LLMWrapper:
                 continue
         raise Exception('Model not available currently ')
 
+    async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk]]:
+        response = await self.client.chat.completions.create(
+            messages=messages,
+            model=model,
+            stream=stream,
+            **kwargs
+        )
+
+        return response
+
     async def non_streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs):
         async with self._sem:
             model = self.models[0]
             judge = self.models[1]
             try:
-                response = await self.client.chat.completions.create(
-                    messages=messages,
-                    model=model,
-                    stream=False,
-                    **kwargs
-                )
-
+                response = await  self.make_llm_call(messages=messages ,model=model,stream=False,**kwargs)
                 return [judge,response.choices[0].message.content]
             except Exception:
                 judge,response = await self.fallback_completion(messages=messages,unavailable_model=model,**kwargs)
@@ -108,7 +107,7 @@ class LLMWrapper:
             raise Exception('Model Attempt Failed retrying...')
 
     async def call_llm_streamed(self,model:str, messages:Iterable[ChatCompletionMessageParam],**kwargs)->Any:
-        return await self.client.chat.completions.create(
+        return await self.make_llm_call(
                     model=model,
                     messages=messages,
                     stream=True,
