@@ -13,15 +13,6 @@ Value = Union[str,int, uuid.UUID,np.ndarray]
 Chunk = Dict[str, Value]
 Chunks = List[Chunk]
 
-# client = genai.Client(api_key='AIzaSyD6Bzy4Usb4nAmwoqrTKL8ke61oHKj4Ke4') ##dangerous
-#
-# async def _get_embeddings_async(texts: list[str]):
-#     response = await client.aio.models.embed_content(
-#         model="gemini-embedding-001",
-#         contents=texts
-#     )
-#     return [e.values for e in response.embeddings]
-
 async def _embed_text(chunks:Chunks,batch_size:int = 100)->Chunks:
     out = []
     texts = []

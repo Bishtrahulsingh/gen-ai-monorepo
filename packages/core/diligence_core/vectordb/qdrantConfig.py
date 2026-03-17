@@ -28,7 +28,7 @@ async def get_or_create_collection(collection_name:str, dimension:int):
             ),
             hnsw_config=HnswConfigDiff(
                 m=16,
-                ef_construct=200,
+                ef_construct=100,
                 full_scan_threshold=10000
             ),
             optimizers_config=OptimizersConfigDiff(
