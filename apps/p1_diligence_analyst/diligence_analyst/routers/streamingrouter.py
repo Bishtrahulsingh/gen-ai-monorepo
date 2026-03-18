@@ -41,23 +41,21 @@ async def llm_calling(payload:RetrivalSchema):
         )}
     ]
     judge_evaluation = await  llm.make_llm_call(messages=evaluator_messages,model=judge,stream=False)
-    print("[top k chunks]: \n", top_k_chunks, end="\n\n")
-    print("raw response: \n", raw_response, end="\n\n")
-    print("judge response: \n",judge_evaluation,end="\n\n")
+    print("judge response: \n",judge_evaluation.choices[0].message.content,end="\n\n")
+
     async def stream_chunk():
         try:
-            yield sse('status',{'request_id': request_id, 'state':'start'})
-            async for chunk in llm.streamed_response(judge=judge,messages=evaluator_messages):
-                yield sse('delta',{'request_id':request_id, 'text':chunk})
-            yield  sse('status', {'request_id': request_id, 'state':'complete'})
+            yield sse('status', {'request_id': request_id, 'state': 'start'})
+            chunk_size = 50
+            for i in range(0, len(raw_response), chunk_size):
+                yield sse('delta', {'request_id': request_id, 'text': raw_response[i:i + chunk_size]})
+
+            judge_content = judge_evaluation.choices[0].message.content
+            yield sse('judge', {'request_id': request_id, 'evaluation': judge_content})
+
+            yield sse('status', {'request_id': request_id, 'state': 'complete'})
         except Exception as e:
-            sse(
-                'error',
-                {
-                    'request_id': request_id,
-                    'error': str(e),
-                    'message':'STREAMING FAILED'
-                }
-            )
+            yield sse('error', {'request_id': request_id, 'error': str(e), 'message': 'STREAMING FAILED'})
             raise
+
     return StreamingResponse(stream_chunk(), media_type="text/event-stream")
