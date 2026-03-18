@@ -1,5 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from diligence_core.app import create_app
 from .routers import company_router,document_router,streaming_router
+from langfuse import Langfuse
+langfuse = Langfuse()
+
 app = create_app()
 app.include_router(company_router,tags=["Company routes"])
 app.include_router(document_router,tags=['Document routes'])

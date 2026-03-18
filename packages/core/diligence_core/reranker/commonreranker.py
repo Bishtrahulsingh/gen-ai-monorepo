@@ -2,10 +2,12 @@ import asyncio
 from typing import List, Any
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
+from langfuse._client.observe import observe
 from qdrant_client.fastembed_common import QueryResponse
 
 rerankerfunc = None
 
+@observe(name="rerank")
 def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
     extracted_chunks = chunks.model_dump()['points']
     texts: List[str] = []
@@ -14,7 +16,8 @@ def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
 
     global rerankerfunc
     if not rerankerfunc:
-        rerankerfunc=TextCrossEncoder('jinaai/jina-reranker-v1-turbo-en')
+        #rerankerfunc=TextCrossEncoder('jinaai/jina-reranker-v1-turbo-en')
+        rerankerfunc=TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
 
     ranks = list(rerankerfunc.rerank(query,texts))
     print(ranks)
