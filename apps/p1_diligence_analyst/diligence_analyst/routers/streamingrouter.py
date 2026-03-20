@@ -26,8 +26,8 @@ async def llm_calling(payload: RetrivalSchema):
         company_id=payload.company_id,
         collection_name=payload.collection_name
     )
-
-    tracer.check_retrival_failure(user_query,context.points[0].score if context else 0)
+    score = context.points[0].score if (context and context.points) else 0
+    tracer.check_retrival_failure(user_query,score)
 
     top_k_chunks = await async_reranker(context, user_query, top_k=5)
     user_prompt = replace_input_values(

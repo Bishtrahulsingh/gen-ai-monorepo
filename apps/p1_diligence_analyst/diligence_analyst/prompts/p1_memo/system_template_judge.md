@@ -62,6 +62,6 @@ Respond ONLY with valid JSON. No explanation outside the JSON.
 }
 
 VERDICT RULES:
-- verdict = "pass"  if faithfulness >= 7 AND answer_relevance >= 7
-- verdict = "fail"  if faithfulness < 7  OR  answer_relevance < 7
+- verdict = "pass"  if faithfulness >= 0.7 AND answer_relevance >= 0.7
+- verdict = "fail"  if faithfulness < 0.7  OR  answer_relevance < 0.7
 - context_precision NEVER affects verdict
