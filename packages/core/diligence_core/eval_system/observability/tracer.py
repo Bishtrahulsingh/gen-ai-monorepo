@@ -16,6 +16,19 @@ class AnalysisTracer:
                     value=float(value)
                 )
 
+    def check_retrival_failure(self,query:str, highest_score:int, threshold:int=0.7):
+
+        if highest_score>=threshold:
+            return
+
+        self._lf.update_current_trace(
+            tags=['retrival_failure'],
+            metadata={
+                'query': query,
+                'highest_score': highest_score,
+            }
+        )
+
     def update_trace(self, user_query: str, company_name: str, chunks_count: int):
         self._lf.update_current_trace(
             input=user_query,

@@ -1,10 +1,10 @@
 import json
 import uuid
 from fastapi import APIRouter
-from langfuse import observe, get_client
 from starlette.responses import StreamingResponse
 from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
+from diligence_core.eval_system.observability import trace, AnalysisTracer
 from diligence_core.llm import LLMWrapper
 from diligence_core.reranker.commonreranker import async_reranker
 
@@ -14,9 +14,9 @@ def sse(event: str, data: dict) -> str:
 router = APIRouter(prefix='/api/result')
 
 @router.post('/stream')
-@observe(name="analyze_query")
+@trace(name="analyze_query")
 async def llm_calling(payload: RetrivalSchema):
-    lf = get_client()
+    tracer = AnalysisTracer()
     llm = LLMWrapper()
     user_query = payload.query
     company_name = payload.company_name
@@ -26,6 +26,8 @@ async def llm_calling(payload: RetrivalSchema):
         company_id=payload.company_id,
         collection_name=payload.collection_name
     )
+
+    tracer.check_retrival_failure(user_query,context.points[0].score if context else 0)
 
     top_k_chunks = await async_reranker(context, user_query, top_k=5)
     user_prompt = replace_input_values(
@@ -59,25 +61,11 @@ async def llm_calling(payload: RetrivalSchema):
 
     try:
         scores = json.loads(judge_evaluation.choices[0].message.content)
-        trace_id = lf.get_current_trace_id()
-        for name, value in scores.items():
-            if isinstance(value, (int, float)) and trace_id:
-                lf.create_score(
-                    trace_id=trace_id,
-                    name=name,
-                    value=float(value)
-                )
+        tracer.score_evaluation(scores)
     except (json.JSONDecodeError, KeyError, AttributeError):
         pass
 
-    lf.update_current_trace(
-        input=user_query,
-        metadata={
-            "company": company_name,
-            "chunks_retrieved": len(top_k_chunks),
-        }
-    )
-    lf.flush()
+    tracer.update_trace(user_query, company_name, len(top_k_chunks))
 
     async def stream_chunk():
         try:
@@ -91,5 +79,7 @@ async def llm_calling(payload: RetrivalSchema):
         except Exception as e:
             yield sse('error', {'request_id': request_id, 'error': str(e), 'message': 'STREAMING FAILED'})
             raise
+        finally:
+            tracer.flush()
 
     return StreamingResponse(stream_chunk(), media_type="text/event-stream")

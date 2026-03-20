@@ -6,6 +6,7 @@ from groq.types.chat import ChatCompletionMessageParam, ChatCompletion, ChatComp
 from langfuse._client.observe import observe
 
 from diligence_core import settings
+from diligence_core.eval_system.observability import trace
 from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
 
@@ -15,7 +16,7 @@ class LLMWrapper:
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self._sem = asyncio.Semaphore(max_allowed)
 
-    @observe(name="hyde_retrieval")
+    @trace(name="hyde_retrieval")
     async def hyde_based_context_retrival(self,query: str, company_id: uuid.UUID, collection_name: str):
         #make a llm call for an example ans possible for best retrival
 
@@ -86,7 +87,7 @@ class LLMWrapper:
                 continue
         raise Exception('Model not available currently ')
 
-    @observe(name="llm_call")
+    @trace(name="llm_call")
     async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk]]:
         response = await self.client.chat.completions.create(
             messages=messages,
@@ -97,7 +98,7 @@ class LLMWrapper:
 
         return response
 
-    @observe(name="analyst_llm")
+    @trace(name="analyst_llm")
     async def non_streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs):
         async with self._sem:
             model = self.models[0]
@@ -119,7 +120,7 @@ class LLMWrapper:
                     **kwargs
                 )
 
-    @observe(name="streamed_response")
+    @trace(name="streamed_response")
     async def streamed_response(self,judge:str,messages:Iterable[ChatCompletionMessageParam],**kwargs)->AsyncGenerator[str,None]:
         async with self._sem:
             try:

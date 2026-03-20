@@ -61,4 +61,7 @@ Respond ONLY with valid JSON. No explanation outside the JSON.
   "evidence": "quote the exact chunk text that supports or contradicts the answer"
 }
 
-verdict is "pass" only if all three scores are equal to or above 0.7.
+VERDICT RULES:
+- verdict = "pass"  if faithfulness >= 7 AND answer_relevance >= 7
+- verdict = "fail"  if faithfulness < 7  OR  answer_relevance < 7
+- context_precision NEVER affects verdict

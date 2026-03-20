@@ -1,10 +1,12 @@
 from dotenv import load_dotenv
+
+from diligence_core.eval_system.observability import AnalysisTracer
+
 load_dotenv()
 
 from diligence_core.app import create_app
 from .routers import company_router,document_router,streaming_router
-from langfuse import Langfuse
-langfuse = Langfuse()
+tracer = AnalysisTracer()
 
 app = create_app()
 app.include_router(company_router,tags=["Company routes"])

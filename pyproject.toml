@@ -1,3 +1,12 @@
+# pyproject.toml (root)
+
+[tool.uv.workspace]
+members = [
+  "apps/p1_diligence_analyst",
+  "apps/p2_eval_system",
+  "packages/core",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["apps/p1_diligence_analyst/tests", "packages/core/tests"]
 pythonpath = ["."]
