@@ -1,8 +1,38 @@
+import enum
+from typing import List, Union
 from langfuse import get_client
 
-class AnalysisTracer:
+
+class ObservationType(enum.Enum):
+    span = 'span'
+    generation = 'generation'
+    agent = 'agent'
+    tool = 'tool'
+    chain = 'chain'
+    retriever = 'retriever'
+    evaluator = 'evaluator'
+    embedding = 'embedding'
+    guardrail = 'guardrail'
+
+
+class Tracer:
     def __init__(self):
         self._lf = get_client()
+        self._tags: List[str] = []
+        self._metadata: dict = {}
+
+    def start_observation(self, name: str, observation_type: Union[ObservationType, str] = 'span', **kwargs):
+        if isinstance(observation_type, str):
+            observation_type = ObservationType(observation_type)
+        return self._lf.start_as_current_observation(as_type=observation_type.value, name=name, **kwargs)
+
+    def add_tags(self, tags: List[str], **metadata):
+        self._tags = list(set(self._tags + tags))
+        self._metadata.update(metadata)
+        self._lf.update_current_trace(
+            tags=self._tags,
+            metadata=self._metadata,
+        )
 
     def score_evaluation(self, scores: dict):
         trace_id = self._lf.get_current_trace_id()
@@ -15,28 +45,6 @@ class AnalysisTracer:
                     name=name,
                     value=float(value)
                 )
-
-    def check_retrival_failure(self,query:str, highest_score:int, threshold:int=0.7):
-
-        if highest_score>=threshold:
-            return
-
-        self._lf.update_current_trace(
-            tags=['retrival_failure'],
-            metadata={
-                'query': query,
-                'highest_score': highest_score,
-            }
-        )
-
-    def update_trace(self, user_query: str, company_name: str, chunks_count: int):
-        self._lf.update_current_trace(
-            input=user_query,
-            metadata={
-                "company": company_name,
-                "chunks_retrieved": chunks_count,
-            }
-        )
 
     def flush(self):
         self._lf.flush()
