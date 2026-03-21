@@ -12,7 +12,7 @@ from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
 class LLMWrapper:
     def __init__(self,max_allowed:int=10):
-        self.models=['llama-3.1-8b-instant','openai/gpt-oss-20b','llama-3.3-70b-versatile','openai/gpt-oss-120b']
+        self.models=['llama-3.1-8b-instant','openai/gpt-oss-20b','openai/gpt-oss-120b']
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self._sem = asyncio.Semaphore(max_allowed)
         self._tracer = Tracer()
@@ -38,10 +38,10 @@ class LLMWrapper:
             query_messages = [
             {"role": "system", "content": """
             You are a financial analyst assistant.
-    
-            Given a user query, write a short hypothetical passage that might appear 
+
+            Given a user query, write a short hypothetical passage that might appear
             in a 10-K SEC filing or annual report related to that topic.
-        
+
             Rules:
             - Use formal SEC filing language and vocabulary
             - Do NOT invent specific numbers, figures, or percentages
@@ -49,9 +49,9 @@ class LLMWrapper:
               "revenues increased year-over-year", "margins were impacted by"
             - Focus on the VOCABULARY and STRUCTURE of the answer, not the facts
             - 3-5 sentences only
-        
+
             Your goal is to help find relevant passages — not to answer the question.
-                    
+
             """},
             {"role": "user", "content": query},
         ]
@@ -90,13 +90,16 @@ class LLMWrapper:
 
     async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk]]:
         with self._tracer.start_observation(name="llm_call", observation_type='generation'):
-            response = await self.client.chat.completions.create(
-                messages=messages,
-                model=model,
-                stream=stream,
-                **kwargs
-            )
-
+            try:
+                response = await self.client.chat.completions.create(
+                    messages=messages,
+                    model=model,
+                    stream=stream,
+                    **kwargs
+                )
+            except Exception:
+                judge,response = await self.fallback_completion(messages,model)
+                print("fallback response: ", response)
             return response
 
     async def non_streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs):
@@ -135,3 +138,4 @@ class LLMWrapper:
             except Exception as e:
                 logging.info('Model Attempt Failed retrying...')
                 raise
+

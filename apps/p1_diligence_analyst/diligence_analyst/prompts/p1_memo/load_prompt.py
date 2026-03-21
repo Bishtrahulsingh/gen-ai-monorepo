@@ -1,9 +1,15 @@
 from pathlib import Path
 from typing import List
 
-def load_prompt(name:str):
-    path = f"apps/p1_diligence_analyst/diligence_analyst/prompts/p1_memo/{name}"
-    return Path(path).read_text()
+# def load_prompt(name:str):
+#     path = f"apps/p1_diligence_analyst/diligence_analyst/prompts/p1_memo/{name}"
+#     return Path(path).read_text()
+
+_PROMPTS_DIR = Path(__file__).parent
+
+
+def load_prompt(name: str) -> str:
+    return (_PROMPTS_DIR / name).read_text()
 
 def chunk_to_str(chunks:List['str']):
     text_with_id = ''

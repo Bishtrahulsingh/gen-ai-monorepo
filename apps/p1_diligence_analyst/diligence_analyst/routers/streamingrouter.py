@@ -73,9 +73,10 @@ async def llm_calling(payload: RetrivalSchema):
             messages=judge2_messages, model=judge, stream=False
         )
 
+        print(judge2_evaluation)
+
         try:
             scores = json.loads(judge2_evaluation.choices[0].message.content)
-            print(scores)
             tracer.score_evaluation(scores)
         except (json.JSONDecodeError, KeyError, AttributeError):
             pass

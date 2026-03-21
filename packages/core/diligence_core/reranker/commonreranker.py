@@ -2,12 +2,10 @@ import asyncio
 from typing import List, Any
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
-from langfuse._client.observe import observe
 from qdrant_client.fastembed_common import QueryResponse
 
 rerankerfunc = None
 
-@observe(name="rerank")
 def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
     extracted_chunks = chunks.model_dump()['points']
     texts: List[str] = []
@@ -22,7 +20,7 @@ def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
     ranks = list(rerankerfunc.rerank(query,texts))
     print(ranks)
     res = [(chunk,rank) for chunk,rank in sorted(zip(extracted_chunks, ranks),key=lambda x:x[1],reverse=True)]
-    top_K_res = [chunk for chunk,rank in res if rank>=threshold][:min(len(res),top_k)]
+    top_K_res = [chunk for chunk,rank in res][:min(len(res),top_k)]
 
     #handle lost in middle problem
     top_k_res_sandwiched = [{}]*len(top_K_res)

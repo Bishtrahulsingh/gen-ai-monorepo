@@ -13,6 +13,7 @@ Your job is two things:
 
 - Every claim in the polished answer must be traceable to the context
 - Remove or correct any hallucinated figures, metrics, or statements
+- If no statement can be given return Insufficient data to answer the query in polished_answer
 - Do not add new information not present in the context
 - Keep the same JSON structure as the input answer
 - Do not change the tone — keep it investor-grade and analytical
