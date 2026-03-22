@@ -1,9 +1,12 @@
 import asyncio
+import json
 import logging
+import re
 import uuid
 from typing import Iterable, AsyncGenerator, Any, List, Optional, Union
 from groq import AsyncGroq, AsyncStream
 from groq.types.chat import ChatCompletionMessageParam, ChatCompletion, ChatCompletionChunk
+from starlette.responses import JSONResponse
 
 from diligence_core import settings
 from diligence_core.eval_system.observability.tracer import Tracer
@@ -12,7 +15,7 @@ from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
 class LLMWrapper:
     def __init__(self,max_allowed:int=10):
-        self.models=['llama-3.1-8b-instant','openai/gpt-oss-20b','openai/gpt-oss-120b']
+        self.models=['llama-3.1-8b-instant','llama-3.3-70b-versatile','openai/gpt-oss-20b','openai/gpt-oss-120b']
         self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
         self._sem = asyncio.Semaphore(max_allowed)
         self._tracer = Tracer()
@@ -88,9 +91,12 @@ class LLMWrapper:
                 continue
         raise Exception('Model not available currently ')
 
-    async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk]]:
+    async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,parse_json:bool=True,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk] | JSONResponse]:
         with self._tracer.start_observation(name="llm_call", observation_type='generation'):
             try:
+                if parse_json and not stream:
+                    kwargs.setdefault("response_format", {"type": "json_object"})
+
                 response = await self.client.chat.completions.create(
                     messages=messages,
                     model=model,
@@ -99,8 +105,24 @@ class LLMWrapper:
                 )
             except Exception:
                 judge,response = await self.fallback_completion(messages,model)
-                print("fallback response: ", response)
+
+            if parse_json and not stream:
+                return self._extract_json(response)
+
             return response
+
+    def _extract_json(self, response: ChatCompletion) -> Any:
+        raw = response.choices[0].message.content or ""
+
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.DOTALL)
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            match = re.search(r"(\{.*}|\[.*])", cleaned, re.DOTALL)
+            if match:
+                return json.loads(match.group(1))
+            raise ValueError(f"Could not extract JSON from response: {raw!r}")
 
     async def non_streamed_response(self,messages:Iterable[ChatCompletionMessageParam],**kwargs):
         async with self._sem:
@@ -108,7 +130,7 @@ class LLMWrapper:
             judge = self.models[1]
             try:
                 response = await  self.make_llm_call(messages=messages ,model=model,stream=False,**kwargs)
-                return [judge,response.choices[0].message.content]
+                return [judge,response]
             except Exception:
                 judge,response = await self.fallback_completion(messages=messages,unavailable_model=model,**kwargs)
                 if response:

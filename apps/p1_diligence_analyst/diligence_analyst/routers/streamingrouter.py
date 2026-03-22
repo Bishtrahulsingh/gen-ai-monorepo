@@ -57,7 +57,7 @@ async def llm_calling(payload: RetrivalSchema):
         judge1_evaluation = await llm.make_llm_call(
             messages=judge1_messages, model=judge, stream=False
         )
-        polished_answer = judge1_evaluation.choices[0].message.content
+        polished_answer = judge1_evaluation
 
         judge2_system_prompt = load_prompt('system_template_judge2.md')
         judge2_messages = [
@@ -76,7 +76,7 @@ async def llm_calling(payload: RetrivalSchema):
         print(judge2_evaluation)
 
         try:
-            scores = json.loads(judge2_evaluation.choices[0].message.content)
+            scores = json.loads(f'{judge2_evaluation}')
             tracer.score_evaluation(scores)
         except (json.JSONDecodeError, KeyError, AttributeError):
             pass

@@ -8,9 +8,3 @@ Context:
 User Question:
 {{user_question}}
 
-Focus on:
-- Business model
-- Market
-- Risks
-- Red flags
-- Open questions
