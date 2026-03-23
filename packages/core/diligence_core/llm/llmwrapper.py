@@ -79,6 +79,7 @@ class LLMWrapper:
             if not judge:
                 break
             try:
+                print(f"\nusing {available_model} for this call\n")
                 response = await self.make_llm_call(
                 messages=messages,
                 model=available_model,
@@ -89,7 +90,7 @@ class LLMWrapper:
                 return [judge,response.choices[0].message.content]
             except Exception as e:
                 continue
-        raise Exception('Model not available currently ')
+        raise Exception(f'Model not available currently ')
 
     async def make_llm_call(self,messages:Iterable[ChatCompletionMessageParam],model:str,stream:bool=False,parse_json:bool=True,**kwargs)-> Union[ChatCompletion | AsyncStream[ChatCompletionChunk] | JSONResponse]:
         with self._tracer.start_observation(name="llm_call", observation_type='generation'):
@@ -97,6 +98,8 @@ class LLMWrapper:
                 if parse_json and not stream:
                     kwargs.setdefault("response_format", {"type": "json_object"})
 
+
+                print(f"\nusing {model} for this call\n")
                 response = await self.client.chat.completions.create(
                     messages=messages,
                     model=model,
@@ -160,4 +163,3 @@ class LLMWrapper:
             except Exception as e:
                 logging.info('Model Attempt Failed retrying...')
                 raise
-

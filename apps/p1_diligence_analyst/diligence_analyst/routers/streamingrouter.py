@@ -1,7 +1,6 @@
 import json
 import uuid
 from fastapi import APIRouter
-from starlette.responses import StreamingResponse
 from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
 from diligence_core.eval_system.observability.tracer import Tracer
@@ -54,32 +53,25 @@ async def llm_calling(payload: RetrivalSchema):
             )}
         ]
 
-        judge1_evaluation = await llm.make_llm_call(
+        judge_evaluation = await llm.make_llm_call(
             messages=judge1_messages, model=judge, stream=False
         )
-        polished_answer = judge1_evaluation
 
-        judge2_system_prompt = load_prompt('system_template_judge2.md')
-        judge2_messages = [
-            {'role': 'system', 'content': judge2_system_prompt},
-            {'role': 'user', 'content': (
-                f"Question: {user_query}\n\n"
-                f"Retrieved context:\n{chunk_to_str(top_k_chunks)}\n\n"
-                f"Generated answer:\n{polished_answer}"
-            )}
-        ]
+        polished_answer = judge_evaluation.get("polished_answer", raw_response)
 
-        judge2_evaluation = await llm.make_llm_call(
-            messages=judge2_messages, model=judge, stream=False
+        score_fields = ("faithfulness", "answer_relevance", "context_precision")
+        scores = {k: judge_evaluation[k] for k in score_fields if k in judge_evaluation}
+        if scores:
+            tracer.score_evaluation(scores)
+
+        tracer.add_tags(
+            tags=[judge_evaluation.get("verdict", "unknown")],
+            hallucinated_claims=judge_evaluation.get("hallucinated_claims", []),
+            issues=judge_evaluation.get("issues", []),
+            evidence=judge_evaluation.get("evidence", ""),
         )
 
-        print(judge2_evaluation)
-
-        try:
-            scores = json.loads(f'{judge2_evaluation}')
-            tracer.score_evaluation(scores)
-        except (json.JSONDecodeError, KeyError, AttributeError):
-            pass
+        print(judge_evaluation)
 
     tracer.flush()
 

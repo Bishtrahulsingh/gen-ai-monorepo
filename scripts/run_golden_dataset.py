@@ -59,19 +59,13 @@ async def run_single(llm: LLMWrapper, item: dict, sem: asyncio.Semaphore) -> dic
             top_score = context.points[0].score if (context and context.points) else 0.0
             result["retrieval_score"] = round(top_score, 4)
 
-            # if top_score < RETRIEVAL_THRESHOLD:
-            #     result["retrieval_failed"] = True
-            #     result["verdict"] = "fail"
-            #     result["issues"].append(
-            #         f"retrieval_failure: top score {top_score:.2f} < {RETRIEVAL_THRESHOLD}"
-            #     )
-            #     return result
-
             top_k_chunks = await async_reranker(context, question, top_k=5)
             result["chunks_retrieved"] = len(top_k_chunks)
             context_str = chunk_to_str(top_k_chunks)
 
             # --- Generation ---
+            # non_streamed_response calls make_llm_call internally,
+            # so raw_response is already a parsed dict (not a string)
             user_prompt = replace_input_values(
                 load_prompt("input_template.md"),
                 COMPANY_NAME,
@@ -85,24 +79,24 @@ async def run_single(llm: LLMWrapper, item: dict, sem: asyncio.Semaphore) -> dic
             judge_model, raw_response = await llm.non_streamed_response(
                 messages=generator_messages
             )
-            result["generated_answer"] = raw_response
+            # raw_response is a dict — serialise for storage and judge inputs
+            raw_response_str = json.dumps(raw_response) if isinstance(raw_response, dict) else str(raw_response)
+            result["generated_answer"] = raw_response_str
 
             # --- Judge 1: hallucination detection + polish ---
-            judge1_response = await llm.make_llm_call(
+            # make_llm_call now returns a parsed dict directly
+            judge1_scores = await llm.make_llm_call(
                 messages=[
                     {"role": "system", "content": load_prompt("system_template_judge1.md")},
                     {"role": "user",   "content": (
                         f"Question: {question}\n\n"
                         f"Retrieved context:\n{context_str}\n\n"
-                        f"Generated answer:\n{raw_response}"
+                        f"Generated answer:\n{raw_response_str}"
                     )},
                 ],
                 model=judge_model,
                 stream=False,
             )
-            judge1_raw = judge1_response.choices[0].message.content
-            judge1_clean = judge1_raw.strip().removeprefix("```json").removesuffix("```").strip()
-            judge1_scores = json.loads(judge1_clean)
 
             polished_answer = judge1_scores.get("polished_answer", raw_response)
             result["polished_answer"] = (
@@ -115,7 +109,8 @@ async def run_single(llm: LLMWrapper, item: dict, sem: asyncio.Semaphore) -> dic
             await asyncio.sleep(3)  # breathing room between judge1 and judge2
 
             # --- Judge 2: score the polished answer ---
-            judge2_response = await llm.make_llm_call(
+            # make_llm_call now returns a parsed dict directly
+            scores = await llm.make_llm_call(
                 messages=[
                     {"role": "system", "content": load_prompt("system_template_judge2.md")},
                     {"role": "user",   "content": (
@@ -127,9 +122,6 @@ async def run_single(llm: LLMWrapper, item: dict, sem: asyncio.Semaphore) -> dic
                 model=judge_model,
                 stream=False,
             )
-            judge2_raw = judge2_response.choices[0].message.content
-            judge2_clean = judge2_raw.strip().removeprefix("```json").removesuffix("```").strip()
-            scores = json.loads(judge2_clean)
 
             result["faithfulness"]      = scores.get("faithfulness")
             result["answer_relevance"]  = scores.get("answer_relevance")
@@ -187,7 +179,7 @@ async def main():
     print(f"  Total      : {len(results)}")
     print(f"  Passed     : {len(passed)}")
     print(f"  Failed     : {len(failed)}")
-    print(f"  Retrieval↓ : {len(retrieval_failed)}")
+    print(f"  Retrieval  : {len(retrieval_failed)}")
     print(f"  Errors     : {len(errors)}")
     print(f"\n  Avg faithfulness      : {avg_faith:.2f}")
     print(f"  Avg answer_relevance  : {avg_relev:.2f}")
@@ -226,7 +218,7 @@ async def main():
         "results": results,
     }
     out_path.write_text(json.dumps(output, indent=2))
-    print(f"\nFull results → {out_path}\n")
+    print(f"\nFull results -> {out_path}\n")
 
 
 def _avg(results: list, key: str) -> float:
