@@ -10,4 +10,3 @@ class IdModel(APIModel):
 
 class TimeStampModel(APIModel):
     created_at : datetime.datetime
-    updated_at: datetime.datetime

@@ -4,12 +4,10 @@ from typing import Optional
 
 class CompanyCreate(APIModel):
     name:str=Field(...,title='company name', description='name of company')
-    website:Optional[AnyUrl]=Field(title='company website', description='website of company',default=None)
-    industry:str = Field(...,title='industry type', description='industry type of company')
+    ticker:str=Field(title='company ticker', description='company ticker',default='')
+    sector:str = Field(title='industry type', description='industry type of company',default='')
 
 class CompanyOut(IdModel,TimeStampModel):
     name: str
-    website: Optional[AnyUrl] = None
-    industry: Optional[str] =None
 
     model_config = ConfigDict(from_attributes=True)

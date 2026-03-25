@@ -52,7 +52,7 @@ async def create_collection(collection_name: str, dimension:int):
     collection = await get_or_create_collection(collection_name, dimension)
     return collection
 
-async def filter_and_search_chunks(collection_name:str, query:str, company_id):
+async def filter_and_search_chunks(collection_name:str, query:str, company_id:uuid.UUID):
     if await client.collection_exists(collection_name):
         query_vector = await embed_query(query)
         chunks = await client.query_points(

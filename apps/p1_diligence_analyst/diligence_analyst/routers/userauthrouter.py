@@ -1,7 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Depends
 from starlette import status
 from supabase_auth.errors import AuthApiError
-
 from diligence_core.schemas.userschema import UserAuth
 from diligence_core.supabaseconfig import supabaseconfig
 
@@ -38,8 +37,7 @@ async def register_user(payload: UserAuth):
 
 
 @router.post("/login")
-async def login_user(payload: UserAuth, res: Response):
-
+async def login_user(payload: UserAuth,res: Response):
     email = payload.email
     password = payload.password
 
