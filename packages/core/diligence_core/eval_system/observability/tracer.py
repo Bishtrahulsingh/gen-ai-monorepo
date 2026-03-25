@@ -1,19 +1,29 @@
 import enum
-from typing import List, Union
+from typing import Any, List, Union
 from langfuse import get_client
+from pydantic import BaseModel
 
 
 class ObservationType(enum.Enum):
-    span = 'span'
-    generation = 'generation'
-    agent = 'agent'
-    tool = 'tool'
-    chain = 'chain'
-    retriever = 'retriever'
-    evaluator = 'evaluator'
-    embedding = 'embedding'
-    guardrail = 'guardrail'
+    span = "span"
+    generation = "generation"
+    agent = "agent"
+    tool = "tool"
+    chain = "chain"
+    retriever = "retriever"
+    evaluator = "evaluator"
+    embedding = "embedding"
+    guardrail = "guardrail"
 
+class TraceParams(BaseModel):
+    name: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+    version: str | None = None
+    input: Any | None = None
+    output: Any | None = None
+    metadata: Any | None = None
+    tags: list[str] | None = None
 
 class Tracer:
     def __init__(self):
@@ -21,10 +31,17 @@ class Tracer:
         self._tags: List[str] = []
         self._metadata: dict = {}
 
-    def start_observation(self, name: str, observation_type: Union[ObservationType, str] = 'span', **kwargs):
+    def start_observation(
+        self,
+        name: str,
+        observation_type: Union[ObservationType, str] = ObservationType.span,
+        **kwargs,
+    ):
         if isinstance(observation_type, str):
             observation_type = ObservationType(observation_type)
-        return self._lf.start_as_current_observation(as_type=observation_type.value, name=name, **kwargs)
+        return self._lf.start_as_current_observation(
+            as_type=observation_type.value, name=name, **kwargs
+        )
 
     def add_tags(self, tags: List[str], **metadata):
         self._tags = list(set(self._tags + tags))
@@ -43,8 +60,13 @@ class Tracer:
                 self._lf.create_score(
                     trace_id=trace_id,
                     name=name,
-                    value=float(value)
+                    value=float(value),
                 )
+
+    def update_trace(self, params: TraceParams | None = None, **kwargs):
+        if params:
+            kwargs = {**params.model_dump(exclude_none=True), **kwargs}
+        self._lf.update_current_trace(**kwargs)
 
     def flush(self):
         self._lf.flush()

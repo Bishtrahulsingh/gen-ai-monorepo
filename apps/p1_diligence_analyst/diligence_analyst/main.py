@@ -4,12 +4,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from diligence_core.app import create_app
-from .routers import company_router,document_router,streaming_router
+from .routers import company_router,document_router,streaming_router,userauth_router
+
+
 
 app = create_app()
 app.include_router(company_router,tags=["Company routes"])
 app.include_router(document_router,tags=['Document routes'])
 app.include_router(streaming_router,tags=['Streaming routes'])
+app.include_router(userauth_router,tags=['User routes'])
 
 @app.get('/')
 async  def root():

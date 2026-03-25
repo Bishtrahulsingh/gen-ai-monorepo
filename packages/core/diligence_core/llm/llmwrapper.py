@@ -109,6 +109,10 @@ class LLMWrapper:
             except Exception:
                 judge,response = await self.fallback_completion(messages,model)
 
+            self._tracer.update_trace(
+                input=messages,
+                output=response,
+            )
             if parse_json and not stream:
                 return self._extract_json(response)
 

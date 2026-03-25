@@ -16,5 +16,8 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = Field(default="")
     LANGFUSE_BASE_URL: str = Field(default="https://cloud.langfuse.com")
     GEMINI_API_KEY:str = Field(default="")
+    SUPABASE_URL: str
+    SUPABASE_ANON_KEY: str
+    SUPABASE_ADMIN_KEY: str
 
 settings = Settings()

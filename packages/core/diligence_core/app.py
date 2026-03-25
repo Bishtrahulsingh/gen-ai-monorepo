@@ -7,6 +7,7 @@ from .exception.globalexception import validation_error,exception_handler
 from .middlewares.logging import RequestTracingMiddleware
 import logging
 
+from .supabaseconfig.supabaseconfig import init_supabase
 from .vectordb.qdrantConfig import create_collection
 
 logging.basicConfig(
@@ -17,6 +18,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
+    await init_supabase()
     await create_collection('sec_filings', 384)
     yield
 

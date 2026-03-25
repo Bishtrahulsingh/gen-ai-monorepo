@@ -5,6 +5,8 @@ import uuid
 import asyncio
 from google import genai
 
+from diligence_core.eval_system.observability.tracer import Tracer
+
 _query_sem = asyncio.Semaphore(16)
 _context_sem = asyncio.Semaphore(2)
 _embedding_model = TextEmbedding()
@@ -12,6 +14,8 @@ _embedding_model = TextEmbedding()
 Value = Union[str,int, uuid.UUID,np.ndarray]
 Chunk = Dict[str, Value]
 Chunks = List[Chunk]
+
+tracer = Tracer()
 
 async def _embed_text(chunks:Chunks,batch_size:int = 100)->Chunks:
     out = []
@@ -34,9 +38,11 @@ async def embed_query(query:str):
     async with _query_sem:
         qv = await _embed_text([{'text':query}])
         return qv[0]['vector']
-async def embed_context(chunks:Chunks)->Chunks:
-    if not chunks:
-        return []
 
-    async with _context_sem:
-        return await _embed_text(chunks)
+async def embed_context(chunks:Chunks)->Chunks:
+    with tracer.start_observation(name="embed_context",observation_type="embedding"):
+        if not chunks:
+            return []
+
+        async with _context_sem:
+            return await _embed_text(chunks)
