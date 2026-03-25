@@ -14,7 +14,7 @@ class DocumentType(str, enum.Enum):
 class DocumentCreate(APIModel):
     company_id:uuid.UUID = Field(...,title='company_id',description='id of company')
     title:str=Field(...,title='document title',description='title of document')
-    doc_type:DocumentType = Field(...,title='document type',description='type of document from pdf,sec_filling,web,image,audio')
+    doc_type:DocumentType = Field(title='document type',description='type of document from pdf,sec_filling,web,image,audio')
     source:AnyUrl=Field(title='source url',description='enter source url of document')
 
 class DocumentOut(IdModel,TimeStampModel):

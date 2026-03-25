@@ -22,8 +22,6 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
     # {'email': 'bishtrahulsingh.dev.phone@gmail.com', 'email_verified': True, 'phone_verified': False,
     #  'sub': '2af5a9f1-24b9-4ee4-aad6-e6288f2b029d'} user looks like this
     supabase_client = supabaseconfig.supabase_client
-
-    print(user)
     try:
         res = await (
             supabase_client
