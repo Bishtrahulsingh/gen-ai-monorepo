@@ -1,14 +1,20 @@
 import datetime
 import uuid
 
+from edgar.xbrl.standardization import sections
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
 from sqlalchemy.sql.annotation import Annotated
 
-from diligence_core.edgarfilefetching.accesssecfilings import get_10_k_filing
+from diligence_core.chunkingpipeline.documenttochunk import create_chunks_for_structured_data
+from diligence_core.edgarfilefetching.accesssecfilings import get_10_k_filing, FilingDetails
+from diligence_core.embeddings.embeddinggenerator import embed_context
 from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.supabaseconfig import supabaseconfig
+from diligence_core.vectordb.qdrantConfig import update_or_insert_chunk
 from ..schemas import CompanyOut,CompanyCreate
+from ..schemas.companyschema import SearchAndStore
+
 router = APIRouter(prefix="/api/v1", tags=['company'])
 
 @router.post('/company',response_model=CompanyOut)
@@ -45,6 +51,52 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
         raise HTTPException(status_code=400,detail=str(e))
 
 @router.post("/search/company")
-async def search_company_and_store(payload:CompanyCreate):
-    await get_10_k_filing(payload.ticker)
-    return {}
+async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verify_jwt_token)):
+    user = userdata['user']
+    token = userdata['access_token']
+    supabase_client = supabaseconfig.supabase_client
+
+    if not user:
+        raise HTTPException(status_code=401,detail="User does not exist")
+
+    data = await get_10_k_filing(payload.ticker, year=payload.year)
+
+    for filing_data in data:
+
+        ticker = payload.ticker
+        fiscal_year = filing_data['metadata'].fiscal_year
+
+        try:
+            res = await (
+                supabase_client
+                .postgrest
+                .auth(token)
+                .from_("companies")
+                .select("id")
+                .eq("ticker", ticker.upper())
+                .eq("fiscal_year", fiscal_year)
+                .limit(1)
+                .execute()
+            )
+
+            if res.data:
+                continue
+            chunks = await create_chunks_for_structured_data(metadata=filing_data['metadata'], sections=filing_data['sections'])
+
+            context_embeddings = await embed_context(chunks)
+            await update_or_insert_chunk('sec_filings', chunks=context_embeddings)
+
+            await (
+                supabase_client
+                .postgrest
+                .auth(token)
+                .from_('companies')
+                .insert({
+                    'name': filing_data['metadata'].company_name,
+                    'ticker': payload.ticker,
+                    'fiscal_year' : filing_data['metadata'].fiscal_year
+                }).execute())
+        except Exception as e:
+            raise Exception(str(e))
+
+    return {"status": 200, "detail": "document stored successfully"}

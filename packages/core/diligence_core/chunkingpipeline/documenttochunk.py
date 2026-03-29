@@ -1,9 +1,13 @@
+from dataclasses import asdict
+
 import httpx
 import uuid
 from pydantic import AnyUrl
 from pypdf import PdfReader
 from typing import List, Dict, Union
 from io import BytesIO
+
+from diligence_core.edgarfilefetching.accesssecfilings import FilingDetails
 from diligence_core.schemas.chunkschema import ChunkSchema
 
 async def read_file_bytes(file_path: AnyUrl) -> bytes:
@@ -98,5 +102,23 @@ async def create_chunks(
                     vector=[]
                 ).model_dump()
             )
+
+    return chunks
+
+
+async def create_chunks_for_structured_data(metadata:FilingDetails, sections:dict,chunk_size:int=800, overlap:int=80) -> List[Dict[str, Union[str, int, uuid.UUID]]]:
+    print(metadata.company_name)
+    chunks = []
+    for section in sections:
+        splitted_text = recursive_split(sections[section],chunk_size,overlap)
+
+        for text in splitted_text:
+            chunk = {**dict(metadata)}
+            chunk['text'] = text
+            chunk['heading'] = section
+            chunks.append(chunk)
+
+    for chunk in chunks:
+        print(chunk, end="\n\n------------------------")
 
     return chunks

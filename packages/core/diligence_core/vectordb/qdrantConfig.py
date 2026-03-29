@@ -86,19 +86,7 @@ async def update_or_insert_chunk(collection_name:str, chunks:List[ChunkSchema],b
             PointStruct(
                 id = str(uuid.uuid4()),
                 vector=chunk['vector'],
-                payload=MetadataSchema(
-                    text=chunk['text'],
-                    document_id= chunk['document_id'],
-                    company_id= chunk['company_id'],
-                    part= chunk['part'],
-                    item=chunk['item'],
-                    heading = chunk['heading'],
-                    page_number=chunk['page_number'],
-                    chunk_number=chunk['chunk_number'],
-                    doc_type=chunk['doc_type'],
-                    source_url=chunk['source_url'],
-                    filed_at=chunk['filed_at']
-                    ).model_dump()
+                payload={key:chunk[key] for key in dict(chunk) if key!="vector" }
             )
             for chunk in batch_chunk
         ]
