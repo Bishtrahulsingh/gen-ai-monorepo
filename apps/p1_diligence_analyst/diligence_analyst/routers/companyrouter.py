@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
 from sqlalchemy.sql.annotation import Annotated
 
+from diligence_core.edgarfilefetching.accesssecfilings import get_10_k_filing
 from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.supabaseconfig import supabaseconfig
 from ..schemas import CompanyOut,CompanyCreate
@@ -42,3 +43,8 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
         )
     except Exception as e:
         raise HTTPException(status_code=400,detail=str(e))
+
+@router.post("/search/company")
+async def search_company_and_store(payload:CompanyCreate):
+    await get_10_k_filing(payload.ticker)
+    return {}
