@@ -1,5 +1,3 @@
-from dataclasses import asdict
-
 import httpx
 import uuid
 from pydantic import AnyUrl
@@ -7,14 +5,18 @@ from pypdf import PdfReader
 from typing import List, Dict, Union
 from io import BytesIO
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from diligence_core.edgarfilefetching.accesssecfilings import FilingDetails
 from diligence_core.schemas.chunkschema import ChunkSchema
+
 
 async def read_file_bytes(file_path: AnyUrl) -> bytes:
     async with httpx.AsyncClient() as client:
         response = await client.get(file_path)
         response.raise_for_status()
         return response.content
+
 
 async def read_pdf(file_path: AnyUrl) -> list:
     pdf_bytes = await read_file_bytes(file_path)
@@ -25,50 +27,9 @@ async def read_pdf(file_path: AnyUrl) -> list:
         text = page.extract_text() or ""
         pages_list.append({
             "page": i + 1,
-            "text": text.replace("\xa0", " ")  # small cleanup
+            "text": text.replace("\xa0", " ")
         })
     return pages_list
-
-
-def recursive_split(text: str, chunk_size: int, overlap: int) -> List[str]:
-    separators = ["\n\n", "\n", ". ", " ", ""]
-
-    def split(text: str, seps: List[str]) -> List[str]:
-        if len(text) <= chunk_size:
-            return [text]
-
-        if not seps:
-            return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-
-        sep = seps[0]
-        parts = text.split(sep)
-
-        chunks = []
-        current = ""
-
-        for part in parts:
-            if len(current) + len(part) + len(sep) <= chunk_size:
-                current += part + sep
-            else:
-                if current:
-                    chunks.extend(split(current.strip(), seps[1:]))
-                current = part + sep
-
-        if current:
-            chunks.extend(split(current.strip(), seps[1:]))
-
-        return chunks
-
-    base_chunks = split(text, separators)
-
-    final_chunks = []
-    for i, chunk in enumerate(base_chunks):
-        if i > 0:
-            prev = base_chunks[i - 1]
-            chunk = prev[-overlap:] + " " + chunk
-        final_chunks.append(chunk.strip())
-
-    return final_chunks
 
 
 async def create_chunks(
@@ -83,11 +44,18 @@ async def create_chunks(
     pages_list = await read_pdf(file_path=file_path)
     chunks: List[Dict[str, Union[str, int, uuid.UUID]]] = []
 
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        separators=["\n\n", "\n", ". ", " ", ""],
+        strip_whitespace=True
+    )
+
     for page in pages_list:
         page_no = page["page"]
         text = page["text"]
 
-        split_chunks = recursive_split(text, chunk_size, overlap)
+        split_chunks = splitter.split_text(text)
 
         for count, chunk in enumerate(split_chunks):
             chunks.append(
@@ -106,13 +74,28 @@ async def create_chunks(
     return chunks
 
 
-async def create_chunks_for_structured_data(metadata:FilingDetails, sections:dict,chunk_size:int=800, overlap:int=80) -> List[Dict[str, Union[str, int, uuid.UUID]]]:
+async def create_chunks_for_structured_data(
+    metadata: FilingDetails,
+    sections: dict,
+    chunk_size: int = 800,
+    overlap: int = 80
+) -> List[Dict[str, Union[str, int, uuid.UUID]]]:
+
     print(metadata.company_name)
     chunks = []
-    for section in sections:
-        splitted_text = recursive_split(sections[section],chunk_size,overlap)
 
-        for text in splitted_text:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        separators=["\n\n", "\n", ". ", " ", ""],
+        strip_whitespace=True
+    )
+
+    for section in sections:
+        for text in sections[section].split("\n\n"):
+            if len(text)<50:
+                continue
+
             chunk = {**dict(metadata)}
             chunk['text'] = text
             chunk['heading'] = section
@@ -122,3 +105,4 @@ async def create_chunks_for_structured_data(metadata:FilingDetails, sections:dic
         print(chunk, end="\n\n------------------------")
 
     return chunks
+

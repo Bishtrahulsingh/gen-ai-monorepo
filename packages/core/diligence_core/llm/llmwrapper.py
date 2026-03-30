@@ -58,14 +58,14 @@ class LLMWrapper:
             """},
             {"role": "user", "content": query},
         ]
-            response = await self.client.chat.completions.create(
-                messages=query_messages,
-                model='llama-3.1-8b-instant'
-            )
+            # response = await self.client.chat.completions.create(
+            #     messages=query_messages,
+            #     model='llama-3.1-8b-instant'
+            # )
+            #
+            # content = response.choices[0].message.content
 
-            content = response.choices[0].message.content
-
-            context = await filter_and_search_chunks(collection_name=collection_name, query=content,
+            context = await filter_and_search_chunks(collection_name=collection_name, query=query,
                                            company_id=company_id)
             return context
 

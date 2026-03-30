@@ -14,6 +14,7 @@ router = APIRouter(prefix='/api/result')
 
 @router.post('/stream')
 async def llm_calling(payload: RetrivalSchema):
+    print("hellohoefalksdfjlkasjdfklj")
     tracer = Tracer()
     llm = LLMWrapper()
     user_query = payload.query
