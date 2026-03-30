@@ -1,5 +1,4 @@
 import json
-import uuid
 from fastapi import APIRouter
 from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema

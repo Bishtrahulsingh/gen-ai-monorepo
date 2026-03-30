@@ -1,10 +1,5 @@
-import datetime
-import uuid
-
-from edgar.xbrl.standardization import sections
 from fastapi import APIRouter, HTTPException
 from fastapi.params import Depends
-from sqlalchemy.sql.annotation import Annotated
 
 from diligence_core.chunkingpipeline.documenttochunk import create_chunks_for_structured_data
 from diligence_core.edgarfilefetching.accesssecfilings import get_10_k_filing, FilingDetails
@@ -33,7 +28,7 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
         res = await (
             supabase_client
             .postgrest
-            .auth(token)  # <-- this is the key fix
+            .auth(token)
             .from_('companies')
             .insert({
                 'user_id': user['sub'],
@@ -81,7 +76,7 @@ async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verif
 
             if res.data:
                 continue
-            chunks = await create_chunks_for_structured_data(metadata=filing_data['metadata'], sections=filing_data['sections'])
+            chunks,keywords = await create_chunks_for_structured_data(metadata=filing_data['metadata'], sections=filing_data['sections'])
 
             context_embeddings = await embed_context(chunks)
             await update_or_insert_chunk('sec_filings', chunks=context_embeddings)
@@ -94,7 +89,8 @@ async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verif
                 .insert({
                     'name': filing_data['metadata'].company_name,
                     'ticker': payload.ticker,
-                    'fiscal_year' : filing_data['metadata'].fiscal_year
+                    'fiscal_year' : filing_data['metadata'].fiscal_year,
+                    'keywords':keywords
                 }).execute())
         except Exception as e:
             raise Exception(str(e))

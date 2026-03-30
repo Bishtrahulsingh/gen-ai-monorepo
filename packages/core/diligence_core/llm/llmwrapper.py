@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 
 from diligence_core import settings
 from diligence_core.eval_system.observability.tracer import Tracer
+from diligence_core.supabaseconfig import supabaseconfig
 from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
 
@@ -20,23 +21,31 @@ class LLMWrapper:
         self._sem = asyncio.Semaphore(max_allowed)
         self._tracer = Tracer()
 
-    async def hyde_based_context_retrival(self,query: str, company_id: uuid.UUID, collection_name: str):
+    async def hyde_based_context_retrival(self,query: str, company_id: uuid.UUID, collection_name: str,token:str,ticker:str, fiscal_year:int):
         #make a llm call for an example ans possible for best retrival
+        supabase_client = supabaseconfig.supabase_client
         with self._tracer.start_observation(name="hyde retrival",observation_type="span"):
+            res = await (
+                supabase_client
+                .postgrest
+                .auth(token)
+                .from_("companies")
+                .select("id, keywords")
+                .eq("ticker", ticker.upper())
+                .eq("fiscal_year", fiscal_year)
+                .limit(1)
+                .execute()
+            )
 
-            factual_signals = [
-                "what is", "what was", "how much", "total",
-                "exact", "give me", "what were", "revenue of",
-                "earnings", "eps", "net income", "gross margin",
-                "how many", "when did", "which year"
-            ]
+            if res.data:
+                keywords = res.data[0]["keywords"]
+                print(keywords)
 
-            for signal in factual_signals:
-                if signal in query.lower():
-                    context = await filter_and_search_chunks(collection_name=collection_name, query=query,
-                                                             company_id=company_id)
-                    return context
-
+            # keywords = {
+            #     "risk_factors":[],
+            #     "mda": [],
+            #     "business": []
+            # }
 
             query_messages = [
             {"role": "system", "content": """
@@ -58,14 +67,14 @@ class LLMWrapper:
             """},
             {"role": "user", "content": query},
         ]
-            # response = await self.client.chat.completions.create(
-            #     messages=query_messages,
-            #     model='llama-3.1-8b-instant'
-            # )
-            #
-            # content = response.choices[0].message.content
+            response = await self.client.chat.completions.create(
+                messages=query_messages,
+                model='llama-3.1-8b-instant'
+            )
 
-            context = await filter_and_search_chunks(collection_name=collection_name, query=query,
+            content = response.choices[0].message.content
+
+            context = await filter_and_search_chunks(collection_name=collection_name, query=content,
                                            company_id=company_id)
             return context
 

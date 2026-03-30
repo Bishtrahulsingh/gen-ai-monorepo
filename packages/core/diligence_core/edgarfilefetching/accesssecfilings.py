@@ -1,6 +1,5 @@
 import asyncio
 from typing import List
-
 import edgar
 from pydantic import BaseModel
 
