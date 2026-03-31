@@ -4,7 +4,8 @@ from typing import Optional,List
 
 class RetrivalSchema(BaseModel):
     query:str
-    company_name:Optional[str] = Field(default='UNKNOWN',title='company name', description='company name')
-    collection_name:str = Field(title='collection name',description='collection name')
-    company_id:uuid.UUID = Field(title='company id',description='company id')
+    company_name:str = Field(title="Company Name",description="Company Name",default="")
+    collection_name:str = Field(...,title='collection name',description='collection name')
+    ticker:str = Field(...,title='ticker',description='ticker')
+    fiscal_year:int = Field(...,title='fiscal year',description='fiscal year')
     model_config = ConfigDict(from_attributes=True)

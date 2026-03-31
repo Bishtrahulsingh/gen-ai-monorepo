@@ -6,7 +6,7 @@ from qdrant_client.fastembed_common import QueryResponse
 
 rerankerfunc = None
 
-def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
+def reranker(chunks:QueryResponse, query:str, top_k:int=10,threshold:float=0.3):
     extracted_chunks = chunks.model_dump()['points']
     texts: List[str] = []
     for chunk in extracted_chunks:

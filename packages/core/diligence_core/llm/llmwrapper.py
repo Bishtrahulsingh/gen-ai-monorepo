@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import json
 import logging
 import re
@@ -21,7 +22,7 @@ class LLMWrapper:
         self._sem = asyncio.Semaphore(max_allowed)
         self._tracer = Tracer()
 
-    async def hyde_based_context_retrival(self,query: str, company_id: uuid.UUID, collection_name: str,token:str,ticker:str, fiscal_year:int):
+    async def hyde_based_context_retrival(self,query: str, collection_name: str,token:str,ticker:str, fiscal_year:int):
         #make a llm call for an example ans possible for best retrival
         supabase_client = supabaseconfig.supabase_client
         with self._tracer.start_observation(name="hyde retrival",observation_type="span"):
@@ -41,32 +42,76 @@ class LLMWrapper:
                 keywords = res.data[0]["keywords"]
                 print(keywords)
 
-            # keywords = {
-            #     "risk_factors":[],
-            #     "mda": [],
-            #     "business": []
-            # }
-
             query_messages = [
-            {"role": "system", "content": """
-            You are a financial analyst assistant.
+                {
+                    "role": "system",
+                    "content": f"""You are a retrieval query synthesizer for SEC 10-K filings.
 
-            Given a user query, write a short hypothetical passage that might appear
-            in a 10-K SEC filing or annual report related to that topic.
+            Your sole function is to generate a hypothetical document passage for semantic retrieval.
+            You are not answering the user's question. You are writing text that would plausibly
+            appear in the relevant section of a 10-K, so that a vector search against real filings
+            returns the most relevant chunks.
 
-            Rules:
-            - Use formal SEC filing language and vocabulary
-            - Do NOT invent specific numbers, figures, or percentages
-            - Use placeholder language instead: "the company reported significant growth",
-              "revenues increased year-over-year", "margins were impacted by"
-            - Focus on the VOCABULARY and STRUCTURE of the answer, not the facts
-            - 3-5 sentences only
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            PHASE 1 — INTENT MAPPING
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            Your goal is to help find relevant passages — not to answer the question.
+            Before writing, identify:
 
-            """},
-            {"role": "user", "content": query},
-        ]
+            1. PRIMARY SECTION — which 10-K section is most likely to contain the answer?
+               Pick the single best match from the available keywords:
+               {keywords}
+
+               If no keyword matches, infer the closest section from the query's subject matter.
+
+            2. SECONDARY SECTIONS — up to two additional sections that commonly co-occur
+               with the primary section for this query type. Use only if they would materially
+               improve retrieval. If none apply, use none.
+
+            3. LINGUISTIC REGISTER — the dominant language style of the target section:
+               NARRATIVE    → business, strategy, competition, operations
+               RISK-LEGAL   → risk_factors, regulatory_environment, legal_proceedings
+               MD&A         → management_discussion, financial_overview, liquidity
+
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            PHASE 2 — PASSAGE GENERATION
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            Write a single hypothetical passage of 4–6 sentences.
+
+            REQUIRED:
+              □ Formal SEC filing prose — match the linguistic register identified in Phase 1.
+              □ Conceptually expand the query using the primary and secondary sections.
+              □ Use terminology and sentence structures that appear in real 10-K filings.
+              □ Mirror the density and hedging style of the target section
+                (risk sections hedge with "may," "could," "there can be no assurance";
+                 MD&A uses "compared to the prior period," "reflects," "was primarily driven by";
+                 narrative sections use "the Company believes," "intends to," "has positioned").
+
+            PROHIBITED:
+              □ No numerical values — no revenue figures, percentages, growth rates, or metrics.
+                 Use only ordinal or qualitative language: "increased," "declined materially,"
+                 "remained consistent," "was adversely affected."
+              □ No fabricated facts — no named products, named competitors, specific geographies,
+                 or events not present in the query.
+              □ No direct restatement of the user's question.
+              □ No first-person voice ("I," "we" at the synthesizer level — the passage itself
+                 may use "the Company" or "management" as 10-Ks do).
+              □ No commentary, preamble, or explanation outside the passage itself.
+
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            OUTPUT
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            Return only the passage. No labels, no JSON, no section headers, no explanation.
+            The passage is the entire output."""
+                },
+                {
+                    "role": "user",
+                    "content": query
+                },
+            ]
+
             response = await self.client.chat.completions.create(
                 messages=query_messages,
                 model='llama-3.1-8b-instant'
@@ -74,8 +119,7 @@ class LLMWrapper:
 
             content = response.choices[0].message.content
 
-            context = await filter_and_search_chunks(collection_name=collection_name, query=content,
-                                           company_id=company_id)
+            context = await filter_and_search_chunks(collection_name=collection_name, query=content,ticker=ticker, fiscal_year=fiscal_year)
             return context
 
     async def fallback_completion(self,messages:Iterable[ChatCompletionMessageParam], unavailable_model:Optional[str]=None,**kwargs)->List[str]:

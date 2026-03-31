@@ -1,10 +1,13 @@
+import asyncio
 import logging
 import uuid
 from typing import List
 
+from fastembed import SparseTextEmbedding
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http.models import VectorParams, Distance, HnswConfigDiff, OptimizersConfigDiff, PayloadSchemaType, \
-    Filter, FieldCondition, MatchValue, PointStruct
+    Filter, FieldCondition, MatchValue, PointStruct, SparseVectorParams, SparseIndexParams, SparseVector
+from qdrant_client.models import Prefetch, FusionQuery, Fusion
 
 from diligence_core.reranker.commonreranker import async_reranker
 from diligence_core.utilities.settings import settings
@@ -18,14 +21,30 @@ client = AsyncQdrantClient(
     timeout=60
 )
 
-async def get_or_create_collection(collection_name:str, dimension:int):
+_sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
+
+def _encode_sparse(text: str) -> SparseVector:
+    result = list(_sparse_model.embed([text]))[0]
+    return SparseVector(
+        indices=result.indices.tolist(),
+        values=result.values.tolist()
+    )
+
+async def get_or_create_collection(collection_name: str, dimension: int):
     if not await client.collection_exists(collection_name):
         await client.create_collection(
-            collection_name = collection_name,
-            vectors_config= VectorParams(
-                size=dimension,
-                distance=Distance.COSINE,
-            ),
+            collection_name=collection_name,
+            vectors_config={
+                "dense": VectorParams(
+                    size=dimension,
+                    distance=Distance.COSINE,
+                )
+            },
+            sparse_vectors_config={
+                "sparse": SparseVectorParams(
+                    index=SparseIndexParams()
+                )
+            },
             hnsw_config=HnswConfigDiff(
                 m=16,
                 ef_construct=100,
@@ -38,55 +57,114 @@ async def get_or_create_collection(collection_name:str, dimension:int):
         )
 
         await client.create_payload_index(
-            collection_name = collection_name,
+            collection_name=collection_name,
             field_name='company_id',
             field_schema=PayloadSchemaType.KEYWORD
         )
-        logging.info(f"collection {collection_name} created successfully")
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name='ticker',
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name='fiscal_year',
+            field_schema=PayloadSchemaType.INTEGER
+        )
+        logging.info(f"Collection {collection_name} created successfully with all payload indexes")
     else:
-        logging.info(f"collection {collection_name} already exists")
+        logging.info(f"Collection {collection_name} already exists")
 
     return await client.get_collection(collection_name)
 
-async def create_collection(collection_name: str, dimension:int):
+
+async def migrate_add_missing_indexes(collection_name: str):
+    """
+    Run this once for any existing collections that are missing
+    the ticker and fiscal_year payload indexes.
+    """
+    if not await client.collection_exists(collection_name):
+        logging.warning(f"Collection {collection_name} does not exist, skipping migration")
+        return
+
+    try:
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name='ticker',
+            field_schema=PayloadSchemaType.KEYWORD
+        )
+        logging.info(f"Created 'ticker' index on {collection_name}")
+    except Exception as e:
+        logging.warning(f"Could not create 'ticker' index (may already exist): {e}")
+
+    try:
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name='fiscal_year',
+            field_schema=PayloadSchemaType.INTEGER
+        )
+        logging.info(f"Created 'fiscal_year' index on {collection_name}")
+    except Exception as e:
+        logging.warning(f"Could not create 'fiscal_year' index (may already exist): {e}")
+
+    logging.info(f"Migration complete for collection: {collection_name}")
+
+
+async def create_collection(collection_name: str, dimension: int):
     collection = await get_or_create_collection(collection_name, dimension)
     return collection
 
-async def filter_and_search_chunks(collection_name:str, query:str, company_id:uuid.UUID):
+
+async def filter_and_search_chunks(collection_name: str, query: str, ticker: str, fiscal_year: int):
     if await client.collection_exists(collection_name):
-        query_vector = await embed_query(query)
-        chunks = await client.query_points(
-            collection_name=collection_name,
-            query = query_vector,
-            query_filter=Filter(
-                must=[
-                    FieldCondition(
-                        key="company_id",
-                        match=MatchValue(value=str(company_id)),
-                    )
-                ]
-            ),
-            limit=20
+        dense_vector, sparse_vector = await asyncio.gather(
+            embed_query(query),
+            asyncio.to_thread(_encode_sparse, query)
+        )
+        search_filter = Filter(
+            must=[
+                FieldCondition(key="ticker", match=MatchValue(value=str(ticker))),
+                FieldCondition(key="fiscal_year", match=MatchValue(value=fiscal_year)),
+            ]
         )
 
-        # a single chunk looks like this
-        '''
-        points=[ScoredPoint(id='95b13768-d2fc-4212-b73c-e360ac40f597', version=18, score=0.814077, payload={'text': 'Consolidated Income Statements\nFor the Years Ended August 31, 2024, 2023 and 2022 \n2024 2023 2022\nREVENUES:\nRevenues $ 64,896,464 $ 64,111,745 $ 61,594,305 \nOPERATING EXPENSES:\nCost of services  43,734,147  43,380,138  41,892,766 \nSales and marketing  6,846,714  6,582,629  6,108,401 \nGeneral and administrative costs  4,281,316  4,275,943  4,225,957 \nBusiness optimization costs  438,440  1,063,146  — \nTotal operating expenses  55,300,617  55,301,856  52,227,124 \nOPERATING INCOME  9,595,847  8,809', 
-        'document_id': 'd2b8cea3-5e9d-4502-831d-42fedc197dc7', 'company_id': '3fa85f64-5717-4562-b3fc-2c963f66afa6', 'part': 'Unknown', 'item': 'Unknown', 'heading': 'Unknown', 'page_number': 67, 'chunk_number': 0, 'doc_type': 'pdf', 'source_url': 'https://zgeadpognspjixavxdbd.supabase.co/storage/v1/object/public/docs/Accenture-2024-10-K.pdf#page=67', 'filed_at': '2026-03-08T16:16:10.978433'}, vector=None, shard_key=None, order_value=None)
-        '''
+        chunks = await client.query_points(
+            collection_name=collection_name,
+            prefetch=[
+                Prefetch(
+                    query=dense_vector,
+                    using="dense",
+                    filter=search_filter,
+                    limit=40,
+                ),
+                Prefetch(
+                    query=sparse_vector,
+                    using="sparse",
+                    filter=search_filter,
+                    limit=40,
+                ),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=20,
+            with_payload=True,
+        )
 
         return chunks
     else:
-        raise Exception(f"collection {collection_name} does not exist")
+        raise Exception(f"Collection {collection_name} does not exist")
 
-async def update_or_insert_chunk(collection_name:str, chunks:List[ChunkSchema],batch_size:int = 100):
-    for idx in range(0,len(chunks),batch_size):
-        batch_chunk = chunks[idx:min(len(chunks),idx+batch_size)]
+
+async def update_or_insert_chunk(collection_name: str, chunks: List[ChunkSchema], batch_size: int = 100):
+    for idx in range(0, len(chunks), batch_size):
+        batch_chunk = chunks[idx:min(len(chunks), idx + batch_size)]
         points = [
             PointStruct(
-                id = str(uuid.uuid4()),
-                vector=chunk['vector'],
-                payload={key:chunk[key] for key in dict(chunk) if key!="vector" }
+                id=str(uuid.uuid4()),
+                vector={
+                    "dense": chunk['vector'],
+                    "sparse": _encode_sparse(chunk['text']),
+                },
+                payload={key: chunk[key] for key in dict(chunk) if key != "vector"}
             )
             for chunk in batch_chunk
         ]
@@ -94,4 +172,4 @@ async def update_or_insert_chunk(collection_name:str, chunks:List[ChunkSchema],b
             collection_name=collection_name,
             points=points
         )
-    logging.info('chunks stored successfully')
+    logging.info('Chunks stored successfully')

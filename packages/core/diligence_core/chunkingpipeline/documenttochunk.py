@@ -9,22 +9,59 @@ import spacy
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from diligence_core.edgarfilefetching.accesssecfilings import FilingDetails
 from diligence_core.schemas.chunkschema import ChunkSchema
+from multiprocessing import Pool, cpu_count
 
-_nlp = spacy.load("en_core_web_sm")
-_yake_extractor = yake.KeywordExtractor(lan="en", n=2, dedupLim=0.7, top=20)
+_VALID_NER_LABELS = {"LAW", "ORG", "GPE", "PRODUCT"}
+_BATCH_SIZE = 40000
+
+def _process_batch(batch: str):
+    """Runs in a separate process — must be top-level for pickling."""
+    nlp = spacy.load("en_core_web_sm")
+    extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.7, top=20)
+
+    doc = nlp(batch)
+
+    valid_ents = {
+        ent.text.lower()
+        for ent in doc.ents
+        if ent.label_ in _VALID_NER_LABELS and len(ent.text.strip()) > 3
+    }
+
+    ner_kws = [
+        ent.text.strip()
+        for ent in doc.ents
+        if ent.label_ in _VALID_NER_LABELS and len(ent.text.strip()) > 3
+    ]
+
+    yake_kws = [
+        kw for kw, _ in extractor.extract_keywords(batch)
+        if any(ent in kw.lower() for ent in valid_ents)
+    ]
+
+    return yake_kws, ner_kws, valid_ents
+
 
 def extract_section_keywords(section_text: str) -> List[str]:
-    yake_kws = [kw for kw, _ in _yake_extractor.extract_keywords(section_text)]
-    doc = _nlp(section_text[:100000])
-    ner_kws = [ent.text for ent in doc.ents if ent.label_ in ("LAW", "ORG", "GPE", "PERCENT", "MONEY", "DATE")]
+    batches = [
+        section_text[i:i + _BATCH_SIZE]
+        for i in range(0, len(section_text), _BATCH_SIZE)
+    ]
+
+    n_workers = min(cpu_count(), len(batches))
+    with Pool(processes=n_workers) as pool:
+        results = pool.map(_process_batch, batches)
+
     seen = set()
     merged = []
-    for kw in yake_kws + ner_kws:
-        kw_lower = kw.lower().strip()
-        if kw_lower not in seen:
-            seen.add(kw_lower)
-            merged.append(kw)
+    for yake_kws, ner_kws, _ in results:
+        for kw in yake_kws + ner_kws:
+            kw_lower = kw.lower().strip()
+            if kw_lower not in seen:
+                seen.add(kw_lower)
+                merged.append(kw)
+
     return merged
+
 
 async def read_file_bytes(file_path: AnyUrl) -> bytes:
     async with httpx.AsyncClient() as client:
@@ -85,7 +122,6 @@ async def create_chunks_for_structured_data(
     chunk_size: int = 1000,
     overlap: int = 250
 ) -> tuple[List[Dict[str, Union[str, int, uuid.UUID]]], Dict[str, List[str]]]:
-    print(metadata.company_name)
     chunks = []
     section_keywords: Dict[str, List[str]] = {}
     splitter = RecursiveCharacterTextSplitter(
@@ -103,10 +139,5 @@ async def create_chunks_for_structured_data(
             chunk['text'] = text
             chunk['heading'] = section
             chunks.append(chunk)
-    for chunk in chunks:
-        print(chunk, end="\n\n------------------------")
 
-    for section in section_keywords:
-        print(f'section: {section_keywords[section]}',end="\n\n---------------------")
-
-    return [chunks, section_keywords]
+    return chunks, section_keywords

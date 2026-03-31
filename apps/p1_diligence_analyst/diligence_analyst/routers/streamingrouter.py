@@ -1,9 +1,10 @@
 import json
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
 from diligence_core.eval_system.observability.tracer import Tracer
 from diligence_core.llm import LLMWrapper
+from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.reranker.commonreranker import async_reranker
 
 def sse(event: str, data: dict) -> str:
@@ -12,8 +13,13 @@ def sse(event: str, data: dict) -> str:
 router = APIRouter(prefix='/api/result')
 
 @router.post('/stream')
-async def llm_calling(payload: RetrivalSchema):
-    print("hellohoefalksdfjlkasjdfklj")
+async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)):
+    user = userdata['user']
+    token = userdata['access_token']
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User does not exist")
+
     tracer = Tracer()
     llm = LLMWrapper()
     user_query = payload.query
@@ -22,8 +28,10 @@ async def llm_calling(payload: RetrivalSchema):
     with tracer.start_observation("analyze_query","span"):
         context = await llm.hyde_based_context_retrival(
             query=user_query,
-            company_id=payload.company_id,
-            collection_name=payload.collection_name
+            collection_name=payload.collection_name,
+            token=token,
+            ticker=payload.ticker,
+            fiscal_year=payload.fiscal_year,
         )
         score = context.points[0].score if (context and context.points) else 0
         # tracer.check_retrival_failure(user_query,score)
