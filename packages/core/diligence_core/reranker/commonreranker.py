@@ -18,7 +18,6 @@ def reranker(chunks:QueryResponse, query:str, top_k:int=10,threshold:float=0.3):
         rerankerfunc=TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
 
     ranks = list(rerankerfunc.rerank(query,texts))
-    print(ranks)
     res = [(chunk,rank) for chunk,rank in sorted(zip(extracted_chunks, ranks),key=lambda x:x[1],reverse=True)]
     top_K_res = [chunk for chunk,rank in res][:min(len(res),top_k)]
 

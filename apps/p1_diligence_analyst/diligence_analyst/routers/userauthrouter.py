@@ -64,6 +64,8 @@ async def login_user(payload: UserAuth,res: Response):
             max_age=60*60*24
         )
 
+        print(response.session.access_token)
+
         res.set_cookie(
             key="refresh_token",
             value=response.session.refresh_token,

@@ -20,5 +20,6 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str
     SUPABASE_ADMIN_KEY: str
     SECRET_KEY:str
+    NVIDIA_NIM_API_KEY:str
 
 settings = Settings()

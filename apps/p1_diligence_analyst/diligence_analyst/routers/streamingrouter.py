@@ -79,8 +79,6 @@ async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)
             evidence=judge_evaluation.get("evidence", ""),
         )
 
-        print(judge_evaluation)
-
     tracer.flush()
 
     return {"response":polished_answer}

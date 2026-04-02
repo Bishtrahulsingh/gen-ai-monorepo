@@ -7,7 +7,6 @@ supabase_admin:AsyncClient = None
 
 async def init_supabase():
     global supabase_client,supabase_admin
-    print("this is running")
 
     if supabase_client is None:
         supabase_client =await acreate_client(settings.SUPABASE_URL,settings.SUPABASE_ANON_KEY)
