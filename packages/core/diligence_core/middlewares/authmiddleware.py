@@ -6,7 +6,17 @@ from diligence_core.supabaseconfig import supabaseconfig
 async def verify_jwt_token(request:Request):
     supabase = supabaseconfig.supabase_client
     if request and request.headers:
-        access_token = request.cookies.get('access_token')
+        access_token = (
+                request.cookies.get('access_token') or
+                request.cookies.get('sb-access-token')
+        )
+
+        if not access_token:
+            # check authorization header for token
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                access_token = auth_header[7:]
+
         if access_token:
             try:
                 payload = await supabase.auth.get_claims(access_token)

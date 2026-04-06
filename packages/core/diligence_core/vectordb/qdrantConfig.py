@@ -13,7 +13,6 @@ from diligence_core.reranker.commonreranker import async_reranker
 from diligence_core.utilities.settings import settings
 from diligence_core.embeddings.embeddinggenerator import embed_query
 from diligence_core.schemas.chunkschema import ChunkSchema
-from diligence_core.schemas.vectordbmetadataschema import MetadataSchema
 
 client = AsyncQdrantClient(
     url="https://4a59a5a1-9827-45a4-9df2-d7584fcbe28f.us-west-1-0.aws.cloud.qdrant.io:6333",

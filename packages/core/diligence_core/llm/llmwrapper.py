@@ -78,47 +78,33 @@ class LLMWrapper:
     ):
         supabase_client = supabaseconfig.supabase_client
         with self._tracer.start_observation(name="hyde retrival", observation_type="span"):
-            res = await (
-                supabase_client
-                .postgrest
-                .auth(token)
-                .from_("companies")
-                .select("id, keywords")
-                .eq("ticker", ticker.upper())
-                .eq("fiscal_year", fiscal_year)
-                .limit(1)
-                .execute()
-            )
-
-            keywords = res.data[0]["keywords"] if res.data else []
-
             query_messages = [
                 {
                     "role": "system",
-                    "content": f"""You are a retrieval synthesizer for SEC 10-K filings.
+                    "content": """
+            You generate search queries for retrieving passages from SEC 10-K filings.
 
-            Write a short hypothetical passage that looks like it came from a real 10-K filing.
-            This is for vector search retrieval — not to answer the user's question.
+            Rules:
 
-            Before writing, identify:
-            1. PRIMARY SECTION — pick the single best match from: {keywords}
-            2. SECONDARY SECTIONS — up to 2 others from the same list (only if helpful)
-            3. TONE — match the section style:
-               - Narrative: "the Company believes", "intends to", "has positioned"
-               - Risk/Legal: "may", "could", "there can be no assurance"
-               - MD&A: "compared to the prior period", "reflects", "was primarily driven by"
+            1. If the query asks for a specific number, metric, or factual value
+               (e.g., revenue, net income, assets, liabilities, dates),
+               return only the original query.
 
-            Write 4-6 sentences in formal SEC prose.
+            2. If the query is conceptual, analytical, or about risks, causes,
+               trends, or explanations, generate two additional expanded queries
+               using financial and accounting terminology commonly used in SEC filings.
 
-            Never include: numbers, percentages, named products/competitors,
-            restated questions, or any explanation outside the passage.
+            3. Preserve the original meaning of the query.
 
-            Return only the passage."""
+            4. Keep queries concise (one sentence each).
+
+            Return the result as a JSON array of queries.
+            """
                 },
                 {
                     "role": "user",
                     "content": query
-                },
+                }
             ]
 
             response = await self.make_llm_call(
@@ -128,10 +114,14 @@ class LLMWrapper:
             )
 
             content = response.choices[0].message.content
+
             context = await filter_and_search_chunks(
                 collection_name=collection_name, query=content,
                 ticker=ticker, fiscal_year=fiscal_year,
             )
+
+            for c in context:
+                print(c,end="\n-----------------------\n")
             return context
 
     async def nim_fallback_completion(

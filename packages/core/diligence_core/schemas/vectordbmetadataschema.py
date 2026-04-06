@@ -13,6 +13,9 @@ class MetadataSchema(BaseModel):
     page_number:int
     chunk_number:int
     doc_type:str
+    ticker:str
+    fiscal_year:int
+    fiscal_quarter:int= Field(default=0)
     source_url:Union[AnyUrl | str]
     filed_at:Optional[datetime.datetime] = Field(default_factory=datetime.datetime.now)
     model_config = ConfigDict(

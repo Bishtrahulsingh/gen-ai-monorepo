@@ -6,6 +6,7 @@ from diligence_core.edgarfilefetching.accesssecfilings import get_10_k_filing, F
 from diligence_core.embeddings.embeddinggenerator import embed_context
 from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.supabaseconfig import supabaseconfig
+from diligence_core.supabaseconfig.supabaseconfig import supabase_admin
 from diligence_core.vectordb.qdrantConfig import update_or_insert_chunk
 from ..schemas import CompanyOut,CompanyCreate
 from ..schemas.companyschema import SearchAndStore
@@ -15,7 +16,6 @@ router = APIRouter(prefix="/api/v1", tags=['company'])
 @router.post('/company',response_model=CompanyOut)
 async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token)):
     user = userdata['user']
-    token = userdata['access_token']
 
     if not user:
         raise HTTPException(status_code=401,detail="User does not exist")
@@ -23,15 +23,12 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
 
     # {'email': 'bishtrahulsingh.dev.phone@gmail.com', 'email_verified': True, 'phone_verified': False,
     #  'sub': '2af5a9f1-24b9-4ee4-aad6-e6288f2b029d'} user looks like this
-    supabase_client = supabaseconfig.supabase_client
+    supabase_admin = supabaseconfig.supabase_admin
     try:
         res = await (
-            supabase_client
-            .postgrest
-            .auth(token)
+            supabase_admin
             .from_('companies')
             .insert({
-                'user_id': user['sub'],
                 'name': payload.name,
                 'ticker': payload.ticker or None,
                 'sector': payload.sector or None
@@ -49,7 +46,7 @@ async def create_company(payload:CompanyCreate,userdata=Depends(verify_jwt_token
 async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verify_jwt_token)):
     user = userdata['user']
     token = userdata['access_token']
-    supabase_client = supabaseconfig.supabase_client
+    supabase_admin = supabaseconfig.supabase_admin
 
     if not user:
         raise HTTPException(status_code=401,detail="User does not exist")
@@ -63,9 +60,7 @@ async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verif
 
         try:
             res = await (
-                supabase_client
-                .postgrest
-                .auth(token)
+                supabase_admin
                 .from_("companies")
                 .select("id")
                 .eq("ticker", ticker.upper())
@@ -82,9 +77,7 @@ async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verif
             await update_or_insert_chunk('sec_filings', chunks=context_embeddings)
 
             await (
-                supabase_client
-                .postgrest
-                .auth(token)
+                supabase_admin
                 .from_('companies')
                 .insert({
                     'name': filing_data['metadata'].company_name,
@@ -96,3 +89,22 @@ async def search_company_and_store(payload:SearchAndStore,userdata=Depends(verif
             raise Exception(str(e))
 
     return {"status": 200, "detail": "document stored successfully"}
+
+@router.get('/company/distinct')
+async def get_distinct_companies(userdata=Depends(verify_jwt_token)):
+    user = userdata['user']
+    token = userdata['access_token']
+    supabase_admin = supabaseconfig.supabase_admin
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User does not exist")
+
+    res = await (
+        supabase_admin
+        .from_('companies')
+        .select('*')
+        .execute())
+
+    print(res)
+
+    return res.data
