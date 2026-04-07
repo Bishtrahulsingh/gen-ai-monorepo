@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
+from diligence_core import settings
+
 load_dotenv()
 
 from diligence_core.app import create_app
@@ -15,7 +17,7 @@ app.include_router(userauth_router,tags=['User routes'])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[settings.FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
