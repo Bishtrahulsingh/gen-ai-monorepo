@@ -1,5 +1,5 @@
 from diligence_core import APIModel, IdModel, TimeStampModel
-from pydantic import Field, AnyUrl, ConfigDict
+from pydantic import Field, AnyUrl, ConfigDict, BaseModel
 from typing import Optional, List
 
 
@@ -19,3 +19,4 @@ class SearchAndStore(APIModel):
     ticker:str=Field(...,title='company ticker', description='company ticker')
     year:List[int] = Field(...,description='list of year of company sec filings')
     model_config = ConfigDict(from_attributes=True)
+

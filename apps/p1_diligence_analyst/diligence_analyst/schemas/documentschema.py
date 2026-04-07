@@ -24,3 +24,7 @@ class DocumentOut(IdModel,TimeStampModel):
 class StoredDocument(BaseModel):
     fiscal_year:str
     ticker:str
+
+
+class DocumentYearsRequest(BaseModel):
+    ticker: str

@@ -7,7 +7,7 @@ from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.vectordb.qdrantConfig import update_or_insert_chunk
 from ..schemas import DocumentCreate,DocumentOut
 from diligence_core.supabaseconfig import supabaseconfig
-from ..schemas.documentschema import StoredDocument
+from ..schemas.documentschema import StoredDocument, DocumentYearsRequest
 
 router = APIRouter(prefix='/api/v1',tags=['documents'])
 
@@ -92,5 +92,25 @@ async def get_stored_documents(payload:StoredDocument, userdata=Depends(verify_j
         .execute()
     )
 
-    return
+    return res.data
 
+@router.post('/storage/documents/years')
+async def get_year_of_stored_documents(payload:DocumentYearsRequest, userdata=Depends(verify_jwt_token)):
+    user = userdata['user']
+    token = userdata['access_token']
+
+    print("hello bro ")
+
+    if not user:
+        raise Exception("user not logged in")
+
+    supabase_admin = supabaseconfig.supabase_admin
+    res = await (
+        supabase_admin
+        .from_('documents')
+        .select('fiscal_year')
+        .eq('ticker',payload.ticker)
+        .execute()
+    )
+
+    return list(set(item['fiscal_year'] for item in res.data))
