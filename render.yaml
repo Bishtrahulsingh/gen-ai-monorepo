@@ -3,37 +3,38 @@ services:
     name: diligence-analyst
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free                      # change to "starter" when you need always-on
-    region: singapore               # closest free region to India
+    plan: free
+    region: singapore
     envVars:
+      # ── Debug ─────────────────────────────────────────────────
+      - key: DEBUG
+        sync: false
       # ── Supabase ──────────────────────────────────────────────
       - key: SUPABASE_URL
-        sync: false                 # fill in Render dashboard
-      - key: SUPABASE_KEY
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_ANON_KEY
         sync: false
-
+      - key: SUPABASE_ADMIN_KEY
+        sync: false
       # ── Qdrant ────────────────────────────────────────────────
-      - key: QDRANT_URL
-        sync: false
       - key: QDRANT_API_KEY
         sync: false
-
+      - key: COLLECTION_NAME
+        sync: false
       # ── LLM providers ─────────────────────────────────────────
       - key: GROQ_API_KEY
         sync: false
-      - key: GOOGLE_API_KEY
-        sync: false
-
       # ── Langfuse observability ────────────────────────────────
       - key: LANGFUSE_PUBLIC_KEY
         sync: false
       - key: LANGFUSE_SECRET_KEY
         sync: false
-      - key: LANGFUSE_HOST
+      - key: LANGFUSE_BASE_URL
         sync: false
-
       # ── App ───────────────────────────────────────────────────
+      - key: SECRET_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
       - key: PORT
         value: "8000"
