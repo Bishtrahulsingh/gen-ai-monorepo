@@ -2,7 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from starlette.middleware.cors import CORSMiddleware
 
+from . import settings
 from .exception.globalexception import validation_error,exception_handler
 from .middlewares.logging import RequestTracingMiddleware
 import logging
@@ -24,6 +26,13 @@ async def lifespan(app:FastAPI):
 
 def create_app():
     app_c = FastAPI(lifespan=lifespan)
+    app_c.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.FRONTEND_URL],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app_c.add_middleware(RequestTracingMiddleware)
     app_c.add_exception_handler(RequestValidationError,validation_error)
     app_c.add_exception_handler(Exception, exception_handler)

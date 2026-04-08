@@ -15,15 +15,6 @@ app.include_router(streaming_router,tags=['Streaming routes'])
 app.include_router(userauth_router,tags=['User routes'])
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 @app.get('/')
 async  def root():
     return {'message':'welcome to our application'}
