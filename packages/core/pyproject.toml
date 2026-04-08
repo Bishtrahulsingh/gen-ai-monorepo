@@ -35,6 +35,6 @@ test = [
   "pytest-cov",
 ]
 
-
-[tool.setuptools]
-packages = ["diligence_core"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["diligence_core*"]
