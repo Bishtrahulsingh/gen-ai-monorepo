@@ -1,0 +1,36 @@
+# Git
+.git/
+.gitignore
+
+# Python artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.egg-info/
+**/.pytest_cache/
+**/dist/
+**/build/
+
+# Virtual envs
+.venv/
+venv/
+
+# Env files (secrets — never ship these)
+.env
+.env.*
+
+# Dev/test stuff
+**/tests/
+eval_results/
+scripts/
+
+# Docs & IDE
+Readme.md
+.idea/
+.coverage
+
+# Source maps (lesson from the Claude Code leak)
+*.map
+
+# OS
+.DS_Store
