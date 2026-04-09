@@ -87,3 +87,19 @@ async def login_user(payload: UserAuth,res: Response):
             "user_id": response.user.id
         }
     }
+
+@router.post("/logout")
+async def logout_user(res: Response):
+    res.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="Lax",
+        secure=False,
+    )
+    res.delete_cookie(
+        key="refresh_token",
+        httponly=True,
+        samesite="Lax",
+        secure=False,
+    )
+    return {"message": "logged out successfully"}

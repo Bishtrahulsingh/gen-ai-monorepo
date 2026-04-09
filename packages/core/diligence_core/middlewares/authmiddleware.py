@@ -27,7 +27,8 @@ async def verify_jwt_token(request: Request, response: Response):
             "access_token": access_token
         }
 
-    except Exception:
+    except Exception as e:
+        print("from 1:---------------\n",e)
         refresh_token = request.cookies.get('refresh_token')
 
         if not refresh_token:
@@ -61,7 +62,8 @@ async def verify_jwt_token(request: Request, response: Response):
                 "access_token": refreshed.session.access_token
             }
 
-        except Exception:
+        except Exception as e:
+            print("from 2:---------------\n", e)
             response.delete_cookie("access_token")
             response.delete_cookie("refresh_token")
             raise HTTPException(
