@@ -5,8 +5,11 @@ from typing import List
 
 from fastembed import SparseTextEmbedding
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.http.models import VectorParams, Distance, HnswConfigDiff, OptimizersConfigDiff, PayloadSchemaType, \
-    Filter, FieldCondition, MatchValue, PointStruct, SparseVectorParams, SparseIndexParams, SparseVector
+from qdrant_client.http.models import (
+    VectorParams, Distance, HnswConfigDiff, OptimizersConfigDiff,
+    PayloadSchemaType, Filter, FieldCondition, MatchValue, PointStruct,
+    SparseVectorParams, SparseIndexParams, SparseVector
+)
 from qdrant_client.models import Prefetch, FusionQuery, Fusion
 
 from diligence_core.reranker.commonreranker import async_reranker
@@ -22,12 +25,24 @@ client = AsyncQdrantClient(
 
 _sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
 
+_known_collections: set = set()
+
+
 def _encode_sparse(text: str) -> SparseVector:
     result = list(_sparse_model.embed([text]))[0]
     return SparseVector(
         indices=result.indices.tolist(),
         values=result.values.tolist()
     )
+
+
+def _encode_sparse_batch(texts: List[str]) -> List[SparseVector]:
+    results = list(_sparse_model.embed(texts))
+    return [
+        SparseVector(indices=r.indices.tolist(), values=r.values.tolist())
+        for r in results
+    ]
+
 
 async def get_or_create_collection(collection_name: str, dimension: int):
     if not await client.collection_exists(collection_name):
@@ -71,17 +86,16 @@ async def get_or_create_collection(collection_name: str, dimension: int):
             field_schema=PayloadSchemaType.INTEGER
         )
         logging.info(f"Collection {collection_name} created successfully with all payload indexes")
+
+        _known_collections.add(collection_name)
     else:
         logging.info(f"Collection {collection_name} already exists")
+        _known_collections.add(collection_name)
 
     return await client.get_collection(collection_name)
 
 
 async def migrate_add_missing_indexes(collection_name: str):
-    """
-    Run this once for any existing collections that are missing
-    the ticker and fiscal_year payload indexes.
-    """
     if not await client.collection_exists(collection_name):
         logging.warning(f"Collection {collection_name} does not exist, skipping migration")
         return
@@ -114,61 +128,81 @@ async def create_collection(collection_name: str, dimension: int):
     return collection
 
 
-async def filter_and_search_chunks(collection_name: str, query: str, ticker: str, fiscal_year: int):
-    if await client.collection_exists(collection_name):
-        dense_vector, sparse_vector = await asyncio.gather(
-            embed_query(query),
-            asyncio.to_thread(_encode_sparse, query)
-        )
-        search_filter = Filter(
-            must=[
-                FieldCondition(key="ticker", match=MatchValue(value=str(ticker))),
-                FieldCondition(key="fiscal_year", match=MatchValue(value=fiscal_year)),
-            ]
-        )
+async def filter_and_search_chunks(
+    collection_name: str,
+    query: str,
+    ticker: str,
+    fiscal_year: int
+):
+    # Use cached set — avoids a network round-trip on every call
+    if collection_name not in _known_collections:
+        if not await client.collection_exists(collection_name):
+            raise Exception(f"Collection {collection_name} does not exist")
+        _known_collections.add(collection_name)
 
-        chunks = await client.query_points(
-            collection_name=collection_name,
-            prefetch=[
-                Prefetch(
-                    query=dense_vector,
-                    using="dense",
-                    filter=search_filter,
-                    limit=40,
-                ),
-                Prefetch(
-                    query=sparse_vector,
-                    using="sparse",
-                    filter=search_filter,
-                    limit=40,
-                ),
-            ],
-            query=FusionQuery(fusion=Fusion.RRF),
-            limit=20,
-            with_payload=True,
-        )
+    dense_vector, sparse_vector = await asyncio.gather(
+        embed_query(query),
+        asyncio.to_thread(_encode_sparse, query)
+    )
 
-        return chunks
-    else:
-        raise Exception(f"Collection {collection_name} does not exist")
+    search_filter = Filter(
+        must=[
+            FieldCondition(key="ticker", match=MatchValue(value=str(ticker))),
+            FieldCondition(key="fiscal_year", match=MatchValue(value=fiscal_year)),
+        ]
+    )
+
+    chunks = await client.query_points(
+        collection_name=collection_name,
+        prefetch=[
+            Prefetch(
+                query=dense_vector,
+                using="dense",
+                filter=search_filter,
+                limit=40,
+            ),
+            Prefetch(
+                query=sparse_vector,
+                using="sparse",
+                filter=search_filter,
+                limit=40,
+            ),
+        ],
+        query=FusionQuery(fusion=Fusion.RRF),
+        limit=20,
+        with_payload=True,
+    )
+
+    return chunks
 
 
-async def update_or_insert_chunk(collection_name: str, chunks: List[ChunkSchema], batch_size: int = 100):
+async def update_or_insert_chunk(
+    collection_name: str,
+    chunks: List[ChunkSchema],
+    batch_size: int = 100
+):
     for idx in range(0, len(chunks), batch_size):
-        batch_chunk = chunks[idx:min(len(chunks), idx + batch_size)]
+        batch_chunk = chunks[idx: idx + batch_size]
+        sparse_vectors: List[SparseVector] = await asyncio.to_thread(
+            _encode_sparse_batch,
+            [chunk['text'] for chunk in batch_chunk]
+        )
+
         points = [
             PointStruct(
                 id=str(uuid.uuid4()),
                 vector={
                     "dense": chunk['vector'],
-                    "sparse": _encode_sparse(chunk['text']),
+                    "sparse": sparse_vectors[i],
                 },
                 payload={key: chunk[key] for key in dict(chunk) if key != "vector"}
             )
-            for chunk in batch_chunk
+            for i, chunk in enumerate(batch_chunk)
         ]
+
         await client.upsert(
             collection_name=collection_name,
             points=points
         )
-    logging.info('Chunks stored successfully')
+
+    logging.info("Chunks stored successfully")

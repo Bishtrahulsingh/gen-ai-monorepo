@@ -28,7 +28,6 @@ async def verify_jwt_token(request: Request, response: Response):
         }
 
     except Exception as e:
-        print("from 1:---------------\n",e)
         refresh_token = request.cookies.get('refresh_token')
 
         if not refresh_token:
@@ -63,9 +62,18 @@ async def verify_jwt_token(request: Request, response: Response):
             }
 
         except Exception as e:
-            print("from 2:---------------\n", e)
-            response.delete_cookie("access_token")
-            response.delete_cookie("refresh_token")
+            response.delete_cookie(
+                key="access_token",
+                httponly=True,
+                samesite="Lax",
+                secure=False,
+            )
+            response.delete_cookie(
+                key="refresh_token",
+                httponly=True,
+                samesite="Lax",
+                secure=False,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session expired. Please log in again."

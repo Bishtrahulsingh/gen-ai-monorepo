@@ -33,10 +33,6 @@ class LLMWrapper:
             return clean_model
         return model
 
-    # ------------------------------------------------------------------ #
-    #  HyDE                                                                #
-    # ------------------------------------------------------------------ #
-
     async def hyde_based_context_retrival(
         self, query: str, collection_name: str, token: str, ticker: str, fiscal_year: int
     ):

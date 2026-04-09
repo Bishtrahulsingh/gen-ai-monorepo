@@ -1,39 +1,39 @@
 import asyncio
-from typing import List, Any
+from typing import List
 
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client.fastembed_common import QueryResponse
 
-rerankerfunc = None
+_reranker_model = TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
 
-def reranker(chunks:QueryResponse, query:str, top_k:int=5,threshold:float=0.3):
-    extracted_chunks = chunks.model_dump()['points']
-    texts: List[str] = []
-    for chunk in extracted_chunks:
-        texts.append(chunk['payload']['text'])
 
-    global rerankerfunc
-    if not rerankerfunc:
-        #rerankerfunc=TextCrossEncoder('jinaai/jina-reranker-v1-turbo-en')
-        rerankerfunc=TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
-
-    ranks = list(rerankerfunc.rerank(query,texts))
-    res = [(chunk,rank) for chunk,rank in sorted(zip(extracted_chunks, ranks),key=lambda x:x[1],reverse=True)]
-    top_K_res = [chunk for chunk,rank in res][:min(len(res),top_k)]
-
-    #handle lost in middle problem
-    top_k_res_sandwiched = [{}]*len(top_K_res)
-
-    location = 0
-    for chunk in top_K_res:
-        top_k_res_sandwiched[location] = chunk
-
-        if location>=0:
-            location = -1*(location + 1)
+def _sandwich(items: list) -> list:
+    result = [None] * len(items)
+    left, right = 0, len(items) - 1
+    for i, item in enumerate(items):
+        if i % 2 == 0:
+            result[left] = item
+            left += 1
         else:
-            location = location*-1
+            result[right] = item
+            right -= 1
+    return result
 
-    return top_k_res_sandwiched
 
-async def async_reranker(chunks: QueryResponse, query: str, top_k: int = 5,threshold:float=0.3) -> Any:
-    return await asyncio.to_thread(reranker,chunks,query,top_k,threshold)
+def reranker(chunks: QueryResponse, query: str, top_k: int = 5) -> List[dict]:
+    points = chunks.points
+
+    if not points:
+        return []
+
+    texts: List[str] = [p.payload['text'] for p in points]
+    scores = list(_reranker_model.rerank(query, texts))
+
+    ranked = sorted(zip(points, scores), key=lambda x: x[1], reverse=True)
+    top = [point.payload for point, score in ranked][:top_k]
+
+    return _sandwich(top)
+
+
+async def async_reranker(chunks: QueryResponse, query: str, top_k: int = 5) -> List[dict]:
+    return await asyncio.to_thread(reranker, chunks, query, top_k)

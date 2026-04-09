@@ -1,6 +1,8 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
-from diligence_analyst.prompts.p1_memo.load_prompt import replace_input_values, load_prompt, chunk_to_str
+from diligence_analyst.prompts.p1_memo.load_prompt import (
+    replace_input_values, load_prompt, chunk_to_str, build_chunk_metadata_map
+)
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
 from diligence_core.eval_system.observability.tracer import Tracer
 from diligence_core.llm import LLMWrapper
@@ -13,7 +15,7 @@ def sse(event: str, data: dict) -> str:
 router = APIRouter(prefix='/api/result')
 
 @router.post('/stream')
-async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)):
+async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token)):
     user = userdata['user']
     token = userdata['access_token']
 
@@ -25,7 +27,7 @@ async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)
     user_query = payload.query
     company_name = payload.company_name
 
-    with tracer.start_observation("analyze_query","span"):
+    with tracer.start_observation("analyze_query", "span"):
         context = await llm.hyde_based_context_retrival(
             query=user_query,
             collection_name=payload.collection_name,
@@ -34,9 +36,11 @@ async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)
             fiscal_year=payload.fiscal_year,
         )
         score = context.points[0].score if (context and context.points) else 0
-        # tracer.check_retrival_failure(user_query,score)
 
         top_k_chunks = await async_reranker(context, user_query, top_k=5)
+
+        chunk_metadata_map = build_chunk_metadata_map(top_k_chunks)
+
         user_prompt = replace_input_values(
             load_prompt('input_template.md'),
             company_name,
@@ -79,6 +83,23 @@ async def llm_calling(payload: RetrivalSchema,userdata=Depends(verify_jwt_token)
             evidence=judge_evaluation.get("evidence", ""),
         )
 
+        evidence = judge_evaluation.get("evidence", {})
+        evidence_meta = {}
+
+        supporting_idx = evidence.get("supporting_chunk_index")
+        contradicting_idx = evidence.get("contradicting_chunk_index")
+
+        if supporting_idx is not None and supporting_idx in chunk_metadata_map:
+            evidence_meta["supporting"] = chunk_metadata_map[supporting_idx]
+
+        if contradicting_idx is not None and contradicting_idx in chunk_metadata_map:
+            evidence_meta["contradicting"] = chunk_metadata_map[contradicting_idx]
+
     tracer.flush()
 
-    return {"response":judge_evaluation}
+    return {
+        "response": {
+            **judge_evaluation,
+            "evidence_meta": evidence_meta,
+        }
+    }

@@ -16,7 +16,7 @@ Rules:
 - Preserve the original JSON structure and investor-grade tone.
 
 Unit rules:
-- Always read the unit from the table header, not from the answer.
+- Always read the unit from the [units: ...] tag in the chunk, not from the answer.
 - "$64,896 million" in context and "$64.9 billion" in answer is acceptable (unit conversion).
 - "$64,896 million" in context and "$64,896,464 million" in answer is a hallucination.
 - Never mix units across different tables.
@@ -54,6 +54,26 @@ Note: context_precision does not affect verdict.
 
 verdict: "pass" if faithfulness >= faithfulness_threshold AND answer_relevance >= relevance_threshold, otherwise "fail".
 
+EVIDENCE EXTRACTION RULES
+
+The retrieved chunks are prefixed with [chunk_0], [chunk_1], etc.
+Each chunk contains internal ingestion tags that you must understand but NEVER copy into output:
+- [table] — the chunk contains tabular data
+- [Heading > Subheading] — the section breadcrumb this chunk belongs to
+- [units: in millions of dollars, except per share data] — the unit scale for numbers in this chunk
+- Markdown: pipe chars (|), dashes (---), heading hashes (#)
+
+For the evidence fields:
+1. Identify which chunk index (0-based integer) most directly supports the polished answer → supporting_chunk_index
+2. Identify which chunk index most directly contradicts the polished answer → contradicting_chunk_index (null if none)
+3. Copy the relevant sentences or values from that chunk as plain readable text:
+   - Strip all lines starting with [table], [units:, or matching [Word > Word] patterns
+   - Strip all # markdown heading markers
+   - Strip all pipe characters (|) and table separator lines (---|---)
+   - Convert table rows to plain comma-separated values: "Revenue, 64896, 58154"
+   - Never include [chunk_N] prefixes in the text
+   - Output must read as natural text a user can find by eye in the original PDF
+
 OUTPUT
 
 Return only valid JSON. No markdown, no backticks, no extra commentary.
@@ -64,9 +84,12 @@ Return only valid JSON. No markdown, no backticks, no extra commentary.
   "answer_relevance": 0.0,
   "context_precision": 0.0,
   "verdict": "pass or fail",
-  "issues": ["up to 5 issues, most severe first. Example: answer stated $65B but context shows $64.9B"],
+  "issues": ["up to 5 issues, most severe first"],
+  "hallucinated_claims": ["claims removed in Phase 1, or empty list"],
   "evidence": {
-    "supporting": "exact plain text from the context chunk most directly supporting the polished answer, no markdown or formatting",
-    "contradicting": "exact plain text from the context chunk most directly contradicting the polished answer, no markdown or formatting, or null if none"
+    "supporting_chunk_index": 0,
+    "supporting": "plain readable text from that chunk — no markdown, no pipes, no tags",
+    "contradicting_chunk_index": null,
+    "contradicting": null
   }
 }
