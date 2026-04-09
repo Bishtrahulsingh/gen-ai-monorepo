@@ -9,17 +9,16 @@ def load_prompt(name: str) -> str:
 
 
 def chunk_to_str(chunks: List[Any]) -> str:
-    """Render chunks as indexed text for the LLM prompt."""
     text_with_id = ''
     for idx, chunk in enumerate(chunks):
-        text_with_id += f"[chunk_{idx}]:{chunk}\n"
+        text_with_id += f"[chunk_{idx}]:{chunk},source:{chunk['source_url']}\n"
     return text_with_id
 
 
 def build_chunk_metadata_map(chunks: List[Any]) -> Dict[int, Dict]:
     mapping: Dict[int, Dict] = {}
     for idx, chunk in enumerate(chunks):
-        payload = chunk.get('payload', chunk)  # handle both raw dict and Qdrant payload
+        payload = chunk.get('payload', chunk)
         mapping[idx] = {
             'source_url':  str(payload.get('source_url', '')),
             'page_number': payload.get('page_number', 1),

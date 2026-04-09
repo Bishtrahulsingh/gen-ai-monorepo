@@ -31,7 +31,8 @@ async def register_user(payload: UserAuth):
     return {
         "message": "user registered successfully",
         "data": {
-            "user_id": response.user.id
+            "user_id": response.user.id,
+            "email": email,
         }
     }
 
@@ -64,8 +65,6 @@ async def login_user(payload: UserAuth,res: Response):
             max_age=60*60*24
         )
 
-        print(response.session.access_token)
-
         res.set_cookie(
             key="refresh_token",
             value=response.session.refresh_token,
@@ -84,7 +83,8 @@ async def login_user(payload: UserAuth,res: Response):
     return {
         "message": "user logged in",
         "data": {
-            "user_id": response.user.id
+            "user_id": response.user.id,
+            "email": email,
         }
     }
 

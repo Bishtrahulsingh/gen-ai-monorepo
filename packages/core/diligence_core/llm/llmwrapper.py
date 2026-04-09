@@ -78,6 +78,7 @@ class LLMWrapper:
                 collection_name=collection_name, query=raw_content,
                 ticker=ticker, fiscal_year=fiscal_year,
             )
+
             return context
 
     async def groq_fallback_completion(

@@ -134,7 +134,6 @@ async def filter_and_search_chunks(
     ticker: str,
     fiscal_year: int
 ):
-    # Use cached set — avoids a network round-trip on every call
     if collection_name not in _known_collections:
         if not await client.collection_exists(collection_name):
             raise Exception(f"Collection {collection_name} does not exist")
