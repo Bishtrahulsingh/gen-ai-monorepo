@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Response, Depends
+from fastapi import APIRouter, HTTPException, Response
 from starlette import status
 from supabase_auth.errors import AuthApiError
 from diligence_core.schemas.userschema import UserAuth
@@ -17,28 +17,20 @@ async def register_user(payload: UserAuth):
 
     client = supabaseconfig.supabase_client
     try:
-        response = await client.auth.sign_up({
-            "email": email,
-            "password": password
-        })
-
+        response = await client.auth.sign_up({"email": email, "password": password})
         if not response.user:
             raise HTTPException(status_code=400, detail="Registration failed")
-
     except AuthApiError as err:
         raise HTTPException(status_code=400, detail=str(err))
 
     return {
         "message": "user registered successfully",
-        "data": {
-            "user_id": response.user.id,
-            "email": email,
-        }
+        "data": {"user_id": response.user.id, "email": email},
     }
 
 
 @router.post("/login")
-async def login_user(payload: UserAuth,res: Response):
+async def login_user(payload: UserAuth, res: Response):
     email = payload.email
     password = payload.password
 
@@ -48,58 +40,44 @@ async def login_user(payload: UserAuth,res: Response):
     client = supabaseconfig.supabase_client
 
     try:
-        response = await client.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-
+        response = await client.auth.sign_in_with_password(
+            {"email": email, "password": password}
+        )
         if not response.user or not response.session:
             raise HTTPException(status_code=401, detail="Authentication failed")
-
-        res.set_cookie(
-            key="access_token",
-            value=response.session.access_token,
-            httponly=True,
-            samesite="none",
-            secure=True,
-            max_age=60*60*24
-        )
-
-        res.set_cookie(
-            key="refresh_token",
-            value=response.session.refresh_token,
-            httponly=True,
-            samesite="none",
-            secure=True,
-            max_age=60*60*24*7
-        )
 
     except AuthApiError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect email or password",
         )
+    res.set_cookie(
+        key="access_token",
+        value=response.session.access_token,
+        httponly=True,
+        samesite="none",
+        secure=True,
+        max_age=60 * 60 * 24,
+    )
+    res.set_cookie(
+        key="refresh_token",
+        value=response.session.refresh_token,
+        httponly=True,
+        samesite="none",
+        secure=True,
+        max_age=60 * 60 * 24 * 7,
+    )
 
     return {
         "message": "user logged in",
-        "data": {
-            "user_id": response.user.id,
-            "email": email,
-        }
+        "access_token": response.session.access_token,    # ← needed by proxy
+        "refresh_token": response.session.refresh_token,  # ← needed by proxy
+        "data": {"user_id": response.user.id, "email": email},
     }
+
 
 @router.post("/logout")
 async def logout_user(res: Response):
-    res.delete_cookie(
-        key="access_token",
-        httponly=True,
-        samesite="none",
-        secure=True,
-    )
-    res.delete_cookie(
-        key="refresh_token",
-        httponly=True,
-        samesite="none",
-        secure=True,
-    )
+    res.delete_cookie(key="access_token", httponly=True, samesite="none", secure=True)
+    res.delete_cookie(key="refresh_token", httponly=True, samesite="none", secure=True)
     return {"message": "logged out successfully"}
