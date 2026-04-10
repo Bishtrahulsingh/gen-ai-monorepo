@@ -60,8 +60,8 @@ async def login_user(payload: UserAuth,res: Response):
             key="access_token",
             value=response.session.access_token,
             httponly=True,
-            samesite="Lax",
-            secure=False,
+            samesite="none",
+            secure=True,
             max_age=60*60*24
         )
 
@@ -69,8 +69,8 @@ async def login_user(payload: UserAuth,res: Response):
             key="refresh_token",
             value=response.session.refresh_token,
             httponly=True,
-            samesite="Lax",
-            secure=False,
+            samesite="none",
+            secure=True,
             max_age=60*60*24*7
         )
 
@@ -93,13 +93,13 @@ async def logout_user(res: Response):
     res.delete_cookie(
         key="access_token",
         httponly=True,
-        samesite="Lax",
-        secure=False,
+        samesite="none",
+        secure=True,
     )
     res.delete_cookie(
         key="refresh_token",
         httponly=True,
-        samesite="Lax",
-        secure=False,
+        samesite="none",
+        secure=True,
     )
     return {"message": "logged out successfully"}

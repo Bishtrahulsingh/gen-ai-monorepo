@@ -43,16 +43,16 @@ async def verify_jwt_token(request: Request, response: Response):
                 key="access_token",
                 value=refreshed.session.access_token,
                 httponly=True,
-                samesite="Lax",
-                secure=False,
+                samesite="none",
+                secure=True,
                 max_age=60 * 60 * 24
             )
             response.set_cookie(
                 key="refresh_token",
                 value=refreshed.session.refresh_token,
                 httponly=True,
-                samesite="Lax",
-                secure=False,
+                samesite="none",
+                secure=True,
                 max_age=60 * 60 * 24 * 7
             )
 
@@ -65,14 +65,14 @@ async def verify_jwt_token(request: Request, response: Response):
             response.delete_cookie(
                 key="access_token",
                 httponly=True,
-                samesite="Lax",
-                secure=False,
+                samesite="none",
+                secure=True,
             )
             response.delete_cookie(
                 key="refresh_token",
                 httponly=True,
-                samesite="Lax",
-                secure=False,
+                samesite="none",
+                secure=True,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
