@@ -1,6 +1,5 @@
 FROM python:3.12-slim
 
-# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -15,7 +14,8 @@ RUN pip install --no-cache-dir ./packages/core
 COPY apps/p1_diligence_analyst ./apps/p1_diligence_analyst
 RUN pip install --no-cache-dir ./apps/p1_diligence_analyst
 
-# Copy only what the app needs at runtime
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding()"
+
 COPY apps/p1_diligence_analyst/diligence_analyst ./diligence_analyst
 
 EXPOSE 8000
