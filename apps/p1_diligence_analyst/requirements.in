@@ -2,6 +2,4 @@
 
 diligence_core[test]
 
-diligence_core[tokenizers]
-
 -e . --config-settings editable_mode=compat

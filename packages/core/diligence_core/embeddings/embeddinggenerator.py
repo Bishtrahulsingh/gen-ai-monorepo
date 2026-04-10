@@ -3,7 +3,6 @@ from fastembed import TextEmbedding
 import numpy as np
 import uuid
 import asyncio
-from google import genai
 
 from diligence_core.eval_system.observability.tracer import Tracer
 

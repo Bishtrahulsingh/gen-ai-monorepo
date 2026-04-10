@@ -12,13 +12,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from io import BytesIO
 
 from pypdf import PdfReader
-import yake
-import spacy
 
 from diligence_core.edgarfilefetching.accesssecfilings import FilingDetails
 from diligence_core.schemas.chunkschema import ChunkSchema
 
-_VALID_NER_LABELS = {"LAW", "ORG", "GPE", "PRODUCT"}
 _BATCH_SIZE = 40000
 
 _UNIT_RE = re.compile(
@@ -41,46 +38,6 @@ _UNIT_RE = re.compile(
 def _detect_unit(text: str) -> Optional[str]:
     m = _UNIT_RE.search(text)
     return m.group(0).strip() if m else None
-
-
-def _process_batch(batch: str):
-    nlp = spacy.load("en_core_web_sm")
-    extractor = yake.KeywordExtractor(lan="en", n=3, dedupLim=0.7, top=20)
-    doc = nlp(batch)
-    valid_ents = {
-        ent.text.lower()
-        for ent in doc.ents
-        if ent.label_ in _VALID_NER_LABELS and len(ent.text.strip()) > 3
-    }
-    ner_kws = [
-        ent.text.strip()
-        for ent in doc.ents
-        if ent.label_ in _VALID_NER_LABELS and len(ent.text.strip()) > 3
-    ]
-    yake_kws = [
-        kw for kw, _ in extractor.extract_keywords(batch)
-        if any(ent in kw.lower() for ent in valid_ents)
-    ]
-    return yake_kws, ner_kws, valid_ents
-
-
-def extract_section_keywords(section_text: str) -> List[str]:
-    batches = [
-        section_text[i:i + _BATCH_SIZE]
-        for i in range(0, len(section_text), _BATCH_SIZE)
-    ]
-    n_workers = min(cpu_count(), len(batches))
-    with Pool(processes=n_workers) as pool:
-        results = pool.map(_process_batch, batches)
-    seen = set()
-    merged = []
-    for yake_kws, ner_kws, _ in results:
-        for kw in yake_kws + ner_kws:
-            kw_lower = kw.lower().strip()
-            if kw_lower not in seen:
-                seen.add(kw_lower)
-                merged.append(kw)
-    return merged
 
 
 async def read_file_bytes(file_path: AnyUrl) -> bytes:
@@ -338,7 +295,6 @@ async def create_chunks_for_structured_data(
     overlap: int = 250,
 ) -> Tuple[List[Dict[str, Union[str, int, uuid.UUID]]], Dict[str, List[str]]]:
     chunks = []
-    section_keywords: Dict[str, List[str]] = {}
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=overlap,
@@ -346,7 +302,6 @@ async def create_chunks_for_structured_data(
         strip_whitespace=True,
     )
     for section, content in sections.items():
-        section_keywords[section] = extract_section_keywords(content)
         for text in splitter.split_text(content):
             if len(text) < 50:
                 continue
@@ -355,4 +310,4 @@ async def create_chunks_for_structured_data(
             chunk["heading"] = section
             chunks.append(chunk)
 
-    return chunks, section_keywords
+    return chunks, {}
