@@ -5,7 +5,8 @@ import re
 from typing import Iterable, AsyncGenerator, Any, List
 from groq import AsyncGroq
 from groq.types.chat import ChatCompletionMessageParam
-from diligence_core.utilities.settings import settings
+
+from diligence_core import settings
 from diligence_core.eval_system.observability.tracer import Tracer
 from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
@@ -26,6 +27,7 @@ class LLMWrapper:
         self._tracer = Tracer()
 
     def _get_model(self, model: str) -> str:
+
         if "::" in model:
             _, clean_model = model.split("::", 1)
             return clean_model
