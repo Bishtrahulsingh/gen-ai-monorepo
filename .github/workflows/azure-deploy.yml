@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e packages/core
+          cd packages/core && pip install -e . && cd ../..
           grep -v "packages/core" apps/p1_diligence_analyst/requirements.txt > /tmp/requirements_filtered.txt
           pip install -r /tmp/requirements_filtered.txt
 
