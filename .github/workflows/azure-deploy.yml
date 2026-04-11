@@ -35,30 +35,6 @@ jobs:
             --exclude "__pycache__/*" \
             --exclude "*.pyc"
 
-      - name: Set App Settings
-        uses: azure/appservice-settings@v1
-        with:
-          app-name: 'duediligence'
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          app-settings-json: |
-            [
-              { "name": "SCM_DO_BUILD_DURING_DEPLOYMENT", "value": "false",                              "slotSetting": false },
-              { "name": "ENABLE_ORYX_BUILD",              "value": "false",                              "slotSetting": false },
-              { "name": "DEBUG",               "value": "${{ secrets.DEBUG }}",               "slotSetting": false },
-              { "name": "SUPABASE_URL",        "value": "${{ secrets.SUPABASE_URL }}",        "slotSetting": false },
-              { "name": "SUPABASE_ANON_KEY",   "value": "${{ secrets.SUPABASE_ANON_KEY }}",   "slotSetting": false },
-              { "name": "SUPABASE_ADMIN_KEY",  "value": "${{ secrets.SUPABASE_ADMIN_KEY }}",  "slotSetting": false },
-              { "name": "QDRANT_API_KEY",      "value": "${{ secrets.QDRANT_API_KEY }}",      "slotSetting": false },
-              { "name": "COLLECTION_NAME",     "value": "${{ secrets.COLLECTION_NAME }}",     "slotSetting": false },
-              { "name": "GROQ_API_KEY",        "value": "${{ secrets.GROQ_API_KEY }}",        "slotSetting": false },
-              { "name": "LANGFUSE_PUBLIC_KEY", "value": "${{ secrets.LANGFUSE_PUBLIC_KEY }}", "slotSetting": false },
-              { "name": "LANGFUSE_SECRET_KEY", "value": "${{ secrets.LANGFUSE_SECRET_KEY }}", "slotSetting": false },
-              { "name": "LANGFUSE_BASE_URL",   "value": "${{ secrets.LANGFUSE_BASE_URL }}",   "slotSetting": false },
-              { "name": "SECRET_KEY",          "value": "${{ secrets.SECRET_KEY }}",          "slotSetting": false },
-              { "name": "FRONTEND_URL",        "value": "${{ secrets.FRONTEND_URL }}",        "slotSetting": false },
-              { "name": "PORT",                "value": "8000",                               "slotSetting": false }
-            ]
-
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
@@ -66,3 +42,19 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
+          app-settings: |
+            SCM_DO_BUILD_DURING_DEPLOYMENT=false
+            ENABLE_ORYX_BUILD=false
+            DEBUG=${{ secrets.DEBUG }}
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            SUPABASE_ADMIN_KEY=${{ secrets.SUPABASE_ADMIN_KEY }}
+            QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
+            COLLECTION_NAME=${{ secrets.COLLECTION_NAME }}
+            GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+            LANGFUSE_PUBLIC_KEY=${{ secrets.LANGFUSE_PUBLIC_KEY }}
+            LANGFUSE_SECRET_KEY=${{ secrets.LANGFUSE_SECRET_KEY }}
+            LANGFUSE_BASE_URL=${{ secrets.LANGFUSE_BASE_URL }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+            PORT=8000
