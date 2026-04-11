@@ -1,3 +1,4 @@
+import gc
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,25 +6,27 @@ from diligence_core.chunkingpipeline import read_pdf, create_chunks
 from diligence_core.embeddings.embeddinggenerator import embed_context
 from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.vectordb.qdrantConfig import update_or_insert_chunk
-from ..schemas import DocumentCreate,DocumentOut
+from ..schemas import DocumentCreate, DocumentOut
 from diligence_core.supabaseconfig import supabaseconfig
 from ..schemas.documentschema import StoredDocument, DocumentYearsRequest
 
-router = APIRouter(prefix='/api/v1',tags=['documents'])
+router = APIRouter(prefix='/api/v1', tags=['documents'])
 
-@router.post("/store/document",response_model=DocumentOut)
-async def create_document(payload:DocumentCreate,userdata=Depends(verify_jwt_token)):
+
+@router.post("/store/document", response_model=DocumentOut)
+async def create_document(payload: DocumentCreate, userdata=Depends(verify_jwt_token)):
     user = userdata['user']
     token = userdata['access_token']
     source = str(payload.source)
     supabase_client = supabaseconfig.supabase_client
     supabase_admin = supabaseconfig.supabase_admin
+
     try:
         company = await (
             supabase_admin
             .from_('companies')
             .select('ticker')
-            .eq("id",payload.company_id)
+            .eq("id", payload.company_id)
             .limit(1)
             .execute()
         )
@@ -51,18 +54,33 @@ async def create_document(payload:DocumentCreate,userdata=Depends(verify_jwt_tok
         print(e)
         raise HTTPException(status_code=400, detail="failed to store document")
 
-    chunks,headings = await create_chunks(file_path=source,ticker=ticker,fiscal_year=payload.fiscal_year, document_id=data['id'], company_id=payload.company_id)
+    chunks, headings = await create_chunks(
+        file_path=source,
+        ticker=ticker,
+        fiscal_year=payload.fiscal_year,
+        document_id=data['id'],
+        company_id=payload.company_id,
+    )
+    gc.collect()  # free memory from chunking before embedding starts
 
     for chunk in chunks:
         print(chunk, end="\n-----------------------\n")
+
     context_embeddings = await embed_context(chunks)
-    await update_or_insert_chunk('sec_filings',chunks=context_embeddings)
+    del chunks  # release chunk list before upserting
+    gc.collect()
+
+    await update_or_insert_chunk('sec_filings', chunks=context_embeddings)
+    del context_embeddings  # release vectors after upsert
+    gc.collect()
+
     await (
         supabase_admin
         .from_('documents')
-        .update({'headings':headings})
-        .eq('id',data['id'])
-        .execute())
+        .update({'headings': headings})
+        .eq('id', data['id'])
+        .execute()
+    )
 
     return DocumentOut(
         id=data['id'],
@@ -70,12 +88,12 @@ async def create_document(payload:DocumentCreate,userdata=Depends(verify_jwt_tok
         title=data['title'],
         doc_type=data['doc_type'] or None,
         source=data['source_url'] or None,
-        created_at = data['created_at'] or None
+        created_at=data['created_at'] or None,
     )
 
 
 @router.post('/storage/documents')
-async def get_stored_documents(payload:StoredDocument, userdata=Depends(verify_jwt_token)):
+async def get_stored_documents(payload: StoredDocument, userdata=Depends(verify_jwt_token)):
     user = userdata['user']
     token = userdata['access_token']
 
@@ -87,15 +105,16 @@ async def get_stored_documents(payload:StoredDocument, userdata=Depends(verify_j
         supabase_admin
         .from_('documents')
         .select('*')
-        .eq('fiscal_year',payload.fiscal_year)
-        .eq('ticker',payload.ticker)
+        .eq('fiscal_year', payload.fiscal_year)
+        .eq('ticker', payload.ticker)
         .execute()
     )
 
     return res.data
 
+
 @router.post('/storage/documents/years')
-async def get_year_of_stored_documents(payload:DocumentYearsRequest, userdata=Depends(verify_jwt_token)):
+async def get_year_of_stored_documents(payload: DocumentYearsRequest, userdata=Depends(verify_jwt_token)):
     user = userdata['user']
     token = userdata['access_token']
 
@@ -109,7 +128,7 @@ async def get_year_of_stored_documents(payload:DocumentYearsRequest, userdata=De
         supabase_admin
         .from_('documents')
         .select('fiscal_year')
-        .eq('ticker',payload.ticker)
+        .eq('ticker', payload.ticker)
         .execute()
     )
 

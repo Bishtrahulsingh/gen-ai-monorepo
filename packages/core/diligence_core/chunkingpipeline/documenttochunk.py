@@ -1,11 +1,10 @@
 import asyncio
+import gc
 import httpx
 import uuid
 import re
 import fitz
 import pymupdf4llm
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Pool, cpu_count
 from typing import List, Dict, Union, Optional, Tuple
 from pydantic import AnyUrl
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -223,6 +222,7 @@ async def create_chunks(
     chunk_size: int = 1200,
     overlap: int = 80,
 ) -> Tuple[List[Dict[str, Union[str, int, uuid.UUID]]], List[str]]:
+
     if str(file_path).startswith(("http://", "https://")):
         async with httpx.AsyncClient() as client:
             resp = await client.get(str(file_path))
@@ -233,38 +233,28 @@ async def create_chunks(
             pdf_bytes = f.read()
 
     master = fitz.open(stream=pdf_bytes, filetype="pdf")
-    page_args = []
-    for i in range(len(master)):
-        single = fitz.open()
-        single.insert_pdf(master, from_page=i, to_page=i)
-        page_args.append((
-            single.tobytes(),
-            i + 1,
-            str(file_path),
-            str(document_id),
-            str(company_id),
-            ticker,
-            fiscal_year,
-            chunk_size,
-            overlap,
-        ))
-        single.close()
-    master.close()
-
-    loop = asyncio.get_event_loop()
-    workers = min(cpu_count(), len(page_args))
-
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-        results = await asyncio.gather(*[
-            loop.run_in_executor(executor, _process_page_worker, args)
-            for args in page_args
-        ])
+    total_pages = len(master)
 
     all_chunks: List[Dict] = []
     all_headings: List[str] = []
     seen_headings: set = set()
 
-    for raw_chunks, page_headings in results:
+    for i in range(total_pages):
+        single = fitz.open()
+        single.insert_pdf(master, from_page=i, to_page=i)
+        page_bytes = single.tobytes()
+        single.close()
+
+        args = (
+            page_bytes, i + 1, str(file_path),
+            str(document_id), str(company_id),
+            ticker, fiscal_year, chunk_size, overlap,
+        )
+
+        raw_chunks, page_headings = await asyncio.to_thread(
+            _process_page_worker, args
+        )
+
         for c in raw_chunks:
             all_chunks.append(
                 ChunkSchema(
@@ -280,10 +270,18 @@ async def create_chunks(
                     vector=[],
                 ).model_dump()
             )
+
         for h in page_headings:
             if h not in seen_headings:
                 seen_headings.add(h)
                 all_headings.append(h)
+
+        del page_bytes, raw_chunks, page_headings
+        gc.collect()
+
+    master.close()
+    del pdf_bytes
+    gc.collect()
 
     return all_chunks, all_headings
 

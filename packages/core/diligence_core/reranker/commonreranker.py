@@ -4,7 +4,14 @@ from typing import List
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client.fastembed_common import QueryResponse
 
-_reranker_model = TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
+_reranker_model: TextCrossEncoder | None = None
+
+
+def _get_reranker() -> TextCrossEncoder:
+    global _reranker_model
+    if _reranker_model is None:
+        _reranker_model = TextCrossEncoder('Xenova/ms-marco-MiniLM-L-6-v2')
+    return _reranker_model
 
 
 def _sandwich(items: list) -> list:
@@ -27,7 +34,7 @@ def reranker(chunks: QueryResponse, query: str, top_k: int = 5) -> List[dict]:
         return []
 
     texts: List[str] = [p.payload['text'] for p in points]
-    scores = list(_reranker_model.rerank(query, texts))
+    scores = list(_get_reranker().rerank(query, texts))
 
     ranked = sorted(zip(points, scores), key=lambda x: x[1], reverse=True)
     top = [point.payload for point, score in ranked][:top_k]
