@@ -40,3 +40,25 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
+
+      - name: Set App Settings
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: 'diligence'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          app-settings-json: |
+            [
+              { "name": "DEBUG",               "value": "${{ secrets.DEBUG }}",               "slotSetting": false },
+              { "name": "SUPABASE_URL",        "value": "${{ secrets.SUPABASE_URL }}",        "slotSetting": false },
+              { "name": "SUPABASE_ANON_KEY",   "value": "${{ secrets.SUPABASE_ANON_KEY }}",   "slotSetting": false },
+              { "name": "SUPABASE_ADMIN_KEY",  "value": "${{ secrets.SUPABASE_ADMIN_KEY }}",  "slotSetting": false },
+              { "name": "QDRANT_API_KEY",      "value": "${{ secrets.QDRANT_API_KEY }}",      "slotSetting": false },
+              { "name": "COLLECTION_NAME",     "value": "${{ secrets.COLLECTION_NAME }}",     "slotSetting": false },
+              { "name": "GROQ_API_KEY",        "value": "${{ secrets.GROQ_API_KEY }}",        "slotSetting": false },
+              { "name": "LANGFUSE_PUBLIC_KEY", "value": "${{ secrets.LANGFUSE_PUBLIC_KEY }}", "slotSetting": false },
+              { "name": "LANGFUSE_SECRET_KEY", "value": "${{ secrets.LANGFUSE_SECRET_KEY }}", "slotSetting": false },
+              { "name": "LANGFUSE_BASE_URL",   "value": "${{ secrets.LANGFUSE_BASE_URL }}",   "slotSetting": false },
+              { "name": "SECRET_KEY",          "value": "${{ secrets.SECRET_KEY }}",          "slotSetting": false },
+              { "name": "FRONTEND_URL",        "value": "${{ secrets.FRONTEND_URL }}",        "slotSetting": false },
+              { "name": "PORT",                "value": "8000",                               "slotSetting": false }
+            ]
