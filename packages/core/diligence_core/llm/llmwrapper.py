@@ -1,122 +1,236 @@
-import gc
+import asyncio
 import json
-from fastapi import APIRouter, Depends, HTTPException
-from diligence_analyst.prompts.p1_memo.load_prompt import (
-    replace_input_values, load_prompt, chunk_to_str, build_chunk_metadata_map
-)
-from diligence_analyst.schemas.retrivalschema import RetrivalSchema
+import logging
+import re
+from typing import Iterable, AsyncGenerator, Any, List
+from groq import AsyncGroq
+from groq.types.chat import ChatCompletionMessageParam
+from diligence_core.utilities.settings import settings
 from diligence_core.eval_system.observability.tracer import Tracer
-from diligence_core.llm import LLMWrapper
-from diligence_core.middlewares.authmiddleware import verify_jwt_token
-from diligence_core.reranker.commonreranker import async_reranker
-
-_llm = LLMWrapper()
-
-def sse(event: str, data: dict) -> str:
-    return f'event:{event}\ndata:{json.dumps(data, ensure_ascii=False)}\n\n'
-
-router = APIRouter(prefix='/api/result')
+from diligence_core.vectordb.qdrantConfig import filter_and_search_chunks
 
 
-@router.post('/stream')
-async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token)):
-    user = userdata['user']
-    token = userdata['access_token']
-
-    if not user:
-        raise HTTPException(status_code=401, detail="User does not exist")
-
-    tracer = Tracer()
-    user_query = payload.query
-    company_name = payload.company_name
-
-    with tracer.start_observation("analyze_query", "span"):
-
-        context = await _llm.hyde_based_context_retrival(
-            query=user_query,
-            collection_name=payload.collection_name,
-            token=token,
-            ticker=payload.ticker,
-            fiscal_year=payload.fiscal_year,
-        )
-        score = context.points[0].score if (context and context.points) else 0
-
-        top_k_chunks = await async_reranker(context, user_query, top_k=5)
-
-        del context
-        gc.collect()
-
-        chunk_metadata_map = build_chunk_metadata_map(top_k_chunks)
-
-        chunks_str = chunk_to_str(top_k_chunks)
-
-        system_prompt = load_prompt('system_template_model1.md')
-        user_prompt = replace_input_values(
-            load_prompt('input_template.md'),
-            company_name,
-            chunks_str,
-            user_query,
-        )
-        generator_messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
+class LLMWrapper:
+    def __init__(self, max_allowed: int = 10):
+        self.groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        self.groq_models = [
+            'llama-3.1-8b-instant',
+            'llama-3.3-70b-versatile',
+            'llama-3.1-70b-versatile',
+            'llama3-70b-8192',
+            'openai/gpt-4o-mini',
+            'openai/gpt-4o',
         ]
 
-        judge, raw_response = await _llm.non_streamed_response(
-            messages=generator_messages
-        )
+        self._sem = asyncio.Semaphore(max_allowed)
+        self._tracer = Tracer()
 
-        del generator_messages, system_prompt, user_prompt
-        gc.collect()
+    def _get_model(self, model: str) -> str:
+        if "::" in model:
+            _, clean_model = model.split("::", 1)
+            return clean_model
+        return model
 
-        judge1_system_prompt = load_prompt('system_template_judge1.md')
-        judge1_messages = [
-            {'role': 'system', 'content': judge1_system_prompt},
-            {'role': 'user',   'content': (
-                f"Question: {user_query}\n\n"
-                f"Retrieved context:\n{chunks_str}\n\n"   # reuse, don't rebuild
-                f"Generated answer:\n{raw_response}"
-            )},
-        ]
+    async def hyde_based_context_retrival(
+        self, query: str, collection_name: str, token: str, ticker: str, fiscal_year: int
+    ):
+        with self._tracer.start_observation(name="hyde retrival", observation_type="span"):
+            query_messages = [
+                {
+                    "role": "system",
+                    "content": """
+            You generate search queries for retrieving passages from SEC 10-K filings.
 
-        judge_evaluation = await _llm.make_llm_call(
-            messages=judge1_messages, model=judge, stream=False
-        )
+            Rules:
 
-        del judge1_messages, judge1_system_prompt, chunks_str, raw_response
-        gc.collect()
+            1. If the query asks for a specific number, metric, or factual value
+               (e.g., revenue, net income, assets, liabilities, dates),
+               return only the original query.
 
-        polished_answer = judge_evaluation.get("polished_answer", {})
+            2. If the query is conceptual, analytical, or about risks, causes,
+               trends, or explanations, generate two additional expanded queries
+               using financial and accounting terminology commonly used in SEC filings.
 
-        score_fields = ("faithfulness", "answer_relevance", "context_precision")
-        scores = {k: judge_evaluation[k] for k in score_fields if k in judge_evaluation}
-        if scores:
-            tracer.score_evaluation(scores)
+            3. Preserve the original meaning of the query.
 
-        tracer.add_tags(
-            tags=[judge_evaluation.get("verdict", "unknown")],
-            hallucinated_claims=judge_evaluation.get("hallucinated_claims", []),
-            issues=judge_evaluation.get("issues", []),
-            evidence=judge_evaluation.get("evidence", ""),
-        )
+            4. Keep queries concise (one sentence each).
 
-        evidence = judge_evaluation.get("evidence", {})
-        evidence_meta = {}
+            Return the result as a JSON array of queries.
+            """
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ]
 
-        supporting_idx = evidence.get("supporting_chunk_index")
-        contradicting_idx = evidence.get("contradicting_chunk_index")
+            content = await self.make_llm_call(
+                messages=query_messages,
+                model=self.groq_models[0],
+                parse_json=False,
+            )
 
-        if supporting_idx is not None and supporting_idx in chunk_metadata_map:
-            evidence_meta["supporting"] = chunk_metadata_map[supporting_idx]
+            raw_content = content.choices[0].message.content
 
-        if contradicting_idx is not None and contradicting_idx in chunk_metadata_map:
-            evidence_meta["contradicting"] = chunk_metadata_map[contradicting_idx]
+            context = await filter_and_search_chunks(
+                collection_name=collection_name, query=raw_content,
+                ticker=ticker, fiscal_year=fiscal_year,
+            )
 
-    tracer.flush()
+            return context
 
-    return {
-        "response": {
-            **judge_evaluation,
-            "evidence_meta": evidence_meta,
-        }
-    }
+    async def groq_fallback_completion(
+        self,
+        messages: Iterable[ChatCompletionMessageParam],
+        parse_json: bool = False,
+        **kwargs,
+    ) -> List[str]:
+        kwargs.pop("response_format", None)
+
+        for idx, model in enumerate(self.groq_models):
+            judge = self.groq_models[idx + 1] if idx + 1 < len(self.groq_models) else None
+            if not judge:
+                break
+            try:
+                logging.info(f"[Groq fallback] trying {model}")
+                groq_kwargs = dict(kwargs)
+                if parse_json:
+                    groq_kwargs.setdefault("response_format", {"type": "json_object"})
+                response = await self.groq_client.chat.completions.create(
+                    model=model,
+                    messages=list(messages),
+                    **groq_kwargs,
+                )
+                content = response.choices[0].message.content
+                logging.info(f"[Groq fallback] succeeded with {model}")
+                return [f"groq::{judge}", content]
+            except Exception as e:
+                logging.warning(f"[Groq fallback] {model} failed: {e}")
+                continue
+
+        raise Exception("All Groq models failed. No further fallback available.")
+
+    async def make_llm_call(
+        self,
+        messages: Iterable[ChatCompletionMessageParam],
+        model: str,
+        stream: bool = False,
+        parse_json: bool = True,
+        **kwargs,
+    ) -> Any:
+        with self._tracer.start_observation(name="llm_call", observation_type="generation"):
+            try:
+                call_kwargs = dict(kwargs)
+                if parse_json and not stream:
+                    call_kwargs.setdefault("response_format", {"type": "json_object"})
+
+                clean_model = self._get_model(model)
+                logging.info(f"[Groq] using {clean_model}")
+                response = await self.groq_client.chat.completions.create(
+                    messages=list(messages),
+                    model=clean_model,
+                    stream=stream,
+                    **call_kwargs,
+                )
+                self._tracer.update_trace(input=messages, output=response)
+                if parse_json and not stream:
+                    return self._extract_json(response)
+                return response
+
+            except Exception as e:
+                logging.warning(f"[Groq] {model} failed: {e}. Falling back within Groq.")
+                judge, response_content = await self.groq_fallback_completion(
+                    messages, parse_json=parse_json, **kwargs
+                )
+                self._tracer.update_trace(input=messages, output=response_content)
+                if parse_json and not stream:
+                    return self._extract_json(_FakeCompletion(judge, response_content))
+                return _FakeCompletion(judge, response_content)
+
+    def _extract_json(self, response) -> Any:
+        raw = response.choices[0].message.content or ""
+        cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.DOTALL)
+
+        def try_parse(text: str) -> Any:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+            try:
+                fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+                return json.loads(fixed)
+            except json.JSONDecodeError:
+                pass
+            match = re.search(r"(\{.*}|\[.*])", text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', match.group(1))
+                    return json.loads(fixed)
+            raise ValueError(f"Could not extract JSON from response: {raw!r}")
+
+        return try_parse(cleaned)
+
+    async def non_streamed_response(
+        self, messages: Iterable[ChatCompletionMessageParam], parse_json: bool = True, **kwargs
+    ):
+        async with self._sem:
+            primary_model = self.groq_models[0]
+            judge = f"groq::{self.groq_models[1]}"
+            try:
+                response = await self.make_llm_call(
+                    messages=messages, model=primary_model,
+                    stream=False, parse_json=parse_json, **kwargs
+                )
+                return [judge, response]
+            except Exception as e:
+                logging.warning(f"[non_streamed_response] make_llm_call failed: {e}. Running full fallback.")
+                judge, response_content = await self.groq_fallback_completion(
+                    messages=messages, parse_json=parse_json, **kwargs
+                )
+                if response_content:
+                    if parse_json:
+                        parsed = self._extract_json(_FakeCompletion(judge, response_content))
+                        return [judge, parsed]
+                    return [judge, response_content]
+            raise Exception("All Groq model attempts failed.")
+
+    async def streamed_response(
+        self, judge: str, messages: Iterable[ChatCompletionMessageParam], **kwargs
+    ) -> AsyncGenerator[str, None]:
+        async with self._sem:
+            try:
+                clean_kwargs = {k: v for k, v in kwargs.items() if k != "response_format"}
+                clean_model = self._get_model(judge)
+                stream = await self.groq_client.chat.completions.create(
+                    model=clean_model,
+                    messages=list(messages),
+                    stream=True,
+                    **clean_kwargs,
+                )
+                async for chunk in stream:
+                    token_text = chunk.choices[0].delta.content
+                    if not token_text:
+                        continue
+                    yield token_text
+
+            except Exception as e:
+                logging.warning(f"[Streamed] Groq model failed: {e}")
+                raise
+
+
+class _FakeCompletion:
+    def __init__(self, judge: str, content: str):
+        self.choices = [_FakeChoice(content)]
+        self._judge = judge
+
+
+class _FakeChoice:
+    def __init__(self, content: str):
+        self.message = _FakeMessage(content)
+
+
+class _FakeMessage:
+    def __init__(self, content: str):
+        self.content = content

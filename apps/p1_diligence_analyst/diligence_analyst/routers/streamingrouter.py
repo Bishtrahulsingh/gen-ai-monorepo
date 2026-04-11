@@ -6,18 +6,11 @@ from diligence_analyst.prompts.p1_memo.load_prompt import (
 )
 from diligence_analyst.schemas.retrivalschema import RetrivalSchema
 from diligence_core.eval_system.observability.tracer import Tracer
+from diligence_core.llm import LLMWrapper
 from diligence_core.middlewares.authmiddleware import verify_jwt_token
 from diligence_core.reranker.commonreranker import async_reranker
 
-_llm = None
-
-def _get_llm():
-    global _llm
-    if _llm is None:
-        from diligence_core.llm import LLMWrapper
-        _llm = LLMWrapper()
-    return _llm
-
+_llm = LLMWrapper()
 
 def sse(event: str, data: dict) -> str:
     return f'event:{event}\ndata:{json.dumps(data, ensure_ascii=False)}\n\n'
@@ -34,12 +27,12 @@ async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token
         raise HTTPException(status_code=401, detail="User does not exist")
 
     tracer = Tracer()
-    llm = _get_llm()
     user_query = payload.query
     company_name = payload.company_name
 
     with tracer.start_observation("analyze_query", "span"):
-        context = await llm.hyde_based_context_retrival(
+
+        context = await _llm.hyde_based_context_retrival(
             query=user_query,
             collection_name=payload.collection_name,
             token=token,
@@ -69,7 +62,7 @@ async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token
             {"role": "user",   "content": user_prompt},
         ]
 
-        judge, raw_response = await llm.non_streamed_response(
+        judge, raw_response = await _llm.non_streamed_response(
             messages=generator_messages
         )
 
@@ -81,12 +74,12 @@ async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token
             {'role': 'system', 'content': judge1_system_prompt},
             {'role': 'user',   'content': (
                 f"Question: {user_query}\n\n"
-                f"Retrieved context:\n{chunks_str}\n\n"  
+                f"Retrieved context:\n{chunks_str}\n\n"  # reuse, not rebuilt
                 f"Generated answer:\n{raw_response}"
             )},
         ]
 
-        judge_evaluation = await llm.make_llm_call(
+        judge_evaluation = await _llm.make_llm_call(
             messages=judge1_messages, model=judge, stream=False
         )
 
