@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 _PROMPTS_DIR = Path(__file__).parent
 
@@ -11,7 +11,9 @@ def load_prompt(name: str) -> str:
 def chunk_to_str(chunks: List[Any]) -> str:
     text_with_id = ''
     for idx, chunk in enumerate(chunks):
-        text_with_id += f"[chunk_{idx}]:{chunk},source:{chunk['source_url']}\n"
+        text = chunk.get('text', '') if isinstance(chunk, dict) else str(chunk)
+        source = chunk.get('source_url', '') if isinstance(chunk, dict) else ''
+        text_with_id += f"[chunk_{idx}]: {text}\nsource: {source}\n\n"
     return text_with_id
 
 

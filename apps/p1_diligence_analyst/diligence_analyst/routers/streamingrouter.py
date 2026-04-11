@@ -90,16 +90,25 @@ async def llm_calling(payload: RetrivalSchema, userdata=Depends(verify_jwt_token
         contradicting_idx = evidence.get("contradicting_chunk_index")
 
         if supporting_idx is not None and supporting_idx in chunk_metadata_map:
-            evidence_meta["supporting"] = chunk_metadata_map[supporting_idx]
+            meta = chunk_metadata_map[supporting_idx]
+            evidence_meta["supporting_chunk_index"] = supporting_idx
+            evidence_meta["supporting"] = evidence.get("supporting")
+            evidence_meta["supporting_source_url"] = meta.get("source_url")
 
         if contradicting_idx is not None and contradicting_idx in chunk_metadata_map:
-            evidence_meta["contradicting"] = chunk_metadata_map[contradicting_idx]
+            meta = chunk_metadata_map[contradicting_idx]
+            evidence_meta["contradicting_chunk_index"] = contradicting_idx
+            evidence_meta["contradicting"] = evidence.get("contradicting")
+            evidence_meta["contradicting_source_url"] = meta.get("source_url")
 
     tracer.flush()
 
     return {
         "response": {
             **judge_evaluation,
-            "evidence_meta": evidence_meta,
+            "evidence": {
+                **evidence,
+                **evidence_meta,
+            },
         }
     }
