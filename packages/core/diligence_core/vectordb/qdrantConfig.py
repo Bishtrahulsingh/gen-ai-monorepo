@@ -158,17 +158,17 @@ async def filter_and_search_chunks(
                 query=dense_vector,
                 using="dense",
                 filter=search_filter,
-                limit=40,
+                limit=25,
             ),
             Prefetch(
                 query=sparse_vector,
                 using="sparse",
                 filter=search_filter,
-                limit=40,
+                limit=25,
             ),
         ],
         query=FusionQuery(fusion=Fusion.RRF),
-        limit=20,
+        limit=12,
         with_payload=True,
     )
 

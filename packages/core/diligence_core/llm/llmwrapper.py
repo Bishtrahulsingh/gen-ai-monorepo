@@ -33,9 +33,7 @@ class LLMWrapper:
             return clean_model
         return model
 
-    async def hyde_based_context_retrival(
-        self, query: str, collection_name: str, token: str, ticker: str, fiscal_year: int
-    ):
+    async def hyde_based_context_retrival(self, query: str, collection_name: str, token: str, ticker: str, fiscal_year: int):
         with self._tracer.start_observation(name="hyde retrival", observation_type="span"):
             query_messages = [
                 {
@@ -60,26 +58,37 @@ class LLMWrapper:
             Return the result as a JSON array of queries.
             """
                 },
-                {
-                    "role": "user",
-                    "content": query
-                }
+                {"role": "user", "content": query}
             ]
 
-            content = await self.make_llm_call(
-                messages=query_messages,
-                model=self.groq_models[0],
-                parse_json=False,
+            hyde_task = asyncio.create_task(
+                self.make_llm_call(
+                    messages=query_messages,
+                    model=self.groq_models[0],
+                    parse_json=False,
+                )
+            )
+            original_search_task = asyncio.create_task(
+                filter_and_search_chunks(
+                    collection_name=collection_name, query=query,
+                    ticker=ticker, fiscal_year=fiscal_year,
+                )
             )
 
+            content, original_context = await asyncio.gather(hyde_task, original_search_task)
             raw_content = content.choices[0].message.content
 
-            context = await filter_and_search_chunks(
-                collection_name=collection_name, query=raw_content,
-                ticker=ticker, fiscal_year=fiscal_year,
-            )
+            if raw_content.strip() != query.strip():
+                expanded_context = await filter_and_search_chunks(
+                    collection_name=collection_name, query=raw_content,
+                    ticker=ticker, fiscal_year=fiscal_year,
+                )
+                
+                orig_score = original_context.points[0].score if original_context.points else 0
+                exp_score = expanded_context.points[0].score if expanded_context.points else 0
+                return expanded_context if exp_score >= orig_score else original_context
 
-            return context
+            return original_context
 
     async def groq_fallback_completion(
         self,
