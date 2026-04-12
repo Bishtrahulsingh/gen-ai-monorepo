@@ -1,0 +1,3 @@
+-e packages/core
+-e apps/p1_diligence_analyst
+uvicorn[standard]
